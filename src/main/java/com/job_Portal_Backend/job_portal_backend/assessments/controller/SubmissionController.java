@@ -27,6 +27,9 @@ public class SubmissionController {
     @Autowired
     private QuestionRepository questionRepository;
 
+    @Autowired
+    private CodingExecutionService codingExecutionService;
+
     /**
      * POST /api/v1/submissions
      * Candidate submits answer to a question (auto-save as they answer)
@@ -58,7 +61,6 @@ public class SubmissionController {
             submission.setAnswerText(request.getAnswerText());
             submission.setCodeSubmitted(request.getCodeSubmitted());
 
-            // Auto-evaluate based on question type
             Submission saved = evaluationService.submitAnswer(submission);
 
             if (question.getType() != null) {
@@ -69,7 +71,11 @@ public class SubmissionController {
                     case "DESCRIPTIVE":
                         saved = evaluationService.storeDescriptiveAnswer(saved);
                         break;
-                    // CODING handled separately
+                    case "CODING":
+                        if (Boolean.TRUE.equals(request.getEvaluate())) {
+                            saved = evaluationService.evaluateCodingSubmission(saved, request.getLanguage());
+                        }
+                        break;
                 }
             }
 
@@ -95,17 +101,22 @@ public class SubmissionController {
      * (Frontend sends code, backend runs it via Judge0, stores result)
      */
     @PostMapping("/{submissionId}/evaluate-coding")
-    public ResponseEntity<Submission> evaluateCodingSubmission(
+    public ResponseEntity<SubmissionDto> evaluateCodingSubmission(
             @PathVariable Long submissionId,
             @RequestBody CodeExecutionRequest request) {
 
-        // TODO: Call Judge0 API or custom code executor
-        String executionOutput = executeCode(request.getCode(), request.getLanguage(), request.getInput());
-
         Submission submission = evaluationService.getSubmissionById(submissionId);
-        Submission evaluated = evaluationService.evaluateCodingQuestion(submission, executionOutput);
+        if (request.getCode() != null) {
+            submission.setCodeSubmitted(request.getCode());
+        }
+        Submission evaluated = evaluationService.evaluateCodingSubmission(submission, request.getLanguage());
 
-        return ResponseEntity.ok(evaluated);
+        return ResponseEntity.ok(toDto(evaluated));
+    }
+
+    @PostMapping("/execute-code")
+    public ResponseEntity<CodeExecutionResponse> executeCodePreview(@RequestBody CodeExecutionRequest request) {
+        return ResponseEntity.ok(codingExecutionService.execute(request));
     }
 
     /**
@@ -118,9 +129,13 @@ public class SubmissionController {
         return ResponseEntity.ok(submissions);
     }
 
-    private String executeCode(String code, String language, String input) {
-        // TODO: Implement code execution via Judge0 or custom runner
-        // For now, return placeholder
-        return "Output: Code execution not yet implemented";
+    private SubmissionDto toDto(Submission saved) {
+        SubmissionDto submissionDto = new SubmissionDto();
+        submissionDto.setId(saved.getId());
+        submissionDto.setAnswerText(saved.getAnswerText());
+        submissionDto.setMarksObtained(saved.getMarksObtained());
+        submissionDto.setIsCorrect(saved.getIsCorrect());
+        submissionDto.setEvaluationDetails(saved.getEvaluationDetails());
+        return submissionDto;
     }
 }

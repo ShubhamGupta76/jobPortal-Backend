@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
@@ -54,6 +55,16 @@ public class GlobalExceptionHandler {
         log.warn("File upload size exceeded: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(false, "File size exceeds the maximum allowed limit", null));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(ResponseStatusException ex) {
+        log.warn("Request failed with status {}: {}", ex.getStatusCode(), ex.getReason());
+        String message = ex.getReason() == null || ex.getReason().isBlank()
+                ? "Request failed"
+                : ex.getReason();
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(new ApiResponse<>(false, message, null));
     }
 
     @ExceptionHandler(RuntimeException.class)

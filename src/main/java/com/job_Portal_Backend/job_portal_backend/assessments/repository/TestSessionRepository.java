@@ -15,4 +15,6 @@ public interface TestSessionRepository extends JpaRepository<TestSession, Long> 
     List<TestSession> findByAssessmentId(Long assessmentId);
 
     Optional<TestSession> findByIdAndCandidateId(Long id, Long candidateId);
+
+    void deleteByAssessmentId(Long assessmentId);
 }

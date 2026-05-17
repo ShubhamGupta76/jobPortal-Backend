@@ -15,4 +15,13 @@ public class AssessmentCreateRequest {
     private Boolean enableProctoring;
     private Boolean detectCopyPaste;
     private Boolean enforceFullScreen;
+    private Boolean requireWebcam;
+    private Boolean desktopOnly;
+    private Boolean sequentialQuestionsOnly;
+    private Boolean lockAnsweredQuestions;
+    private Boolean autoSubmitOnViolationLimit;
+    private Integer fullscreenViolationLimit;
+    private Integer tabSwitchLimit;
+    private Integer offlineGraceSeconds;
+    private Integer maxAttempts;
 }

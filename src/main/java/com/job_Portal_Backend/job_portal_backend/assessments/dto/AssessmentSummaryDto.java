@@ -19,6 +19,7 @@ public class AssessmentSummaryDto {
     private String description;
     private UserDto recruiter;
     private Long jobId;
+    private String jobTitle;
     private Integer durationMinutes;
     private Integer totalMarks;
     private String passingMarksPercentage;
@@ -38,6 +39,7 @@ public class AssessmentSummaryDto {
         dto.setDescription(assessment.getDescription());
         dto.setRecruiter(UserDto.fromUser(assessment.getRecruiter()));
         dto.setJobId(assessment.getJob() != null ? assessment.getJob().getId() : null);
+        dto.setJobTitle(assessment.getJob() != null ? assessment.getJob().getTitle() : null);
         dto.setDurationMinutes(assessment.getDurationMinutes());
         dto.setTotalMarks(assessment.getTotalMarks());
         dto.setPassingMarksPercentage(assessment.getPassingMarksPercentage());

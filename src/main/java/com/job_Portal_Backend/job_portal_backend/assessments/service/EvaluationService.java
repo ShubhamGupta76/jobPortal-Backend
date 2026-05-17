@@ -2,6 +2,8 @@ package com.job_Portal_Backend.job_portal_backend.assessments.service;
 
 import com.job_Portal_Backend.job_portal_backend.assessments.entity.*;
 import com.job_Portal_Backend.job_portal_backend.assessments.repository.*;
+import com.job_Portal_Backend.job_portal_backend.assessments.dto.CodeExecutionRequest;
+import com.job_Portal_Backend.job_portal_backend.assessments.dto.CodeExecutionResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +27,29 @@ public class EvaluationService {
     @Autowired
     private QuestionRepository questionRepository;
 
+    @Autowired
+    private CodingExecutionService codingExecutionService;
+
     /**
      * Store answer submission for a question
      */
     public Submission submitAnswer(Submission submission) {
+        Optional<Submission> existing = submissionRepository.findByTestSessionIdAndQuestionId(
+                submission.getTestSession().getId(),
+                submission.getQuestion().getId());
+
+        if (existing.isPresent()) {
+            Submission saved = existing.get();
+            saved.setAnswerText(submission.getAnswerText());
+            saved.setCodeSubmitted(submission.getCodeSubmitted());
+            saved.setSubmittedAt(LocalDateTime.now());
+            saved.setUpdatedAt(LocalDateTime.now());
+            return submissionRepository.save(saved);
+        }
+
         submission.setCreatedAt(LocalDateTime.now());
         submission.setUpdatedAt(LocalDateTime.now());
+        submission.setSubmittedAt(LocalDateTime.now());
         return submissionRepository.save(submission);
     }
 
@@ -86,6 +105,44 @@ public class EvaluationService {
         return submissionRepository.save(submission);
     }
 
+    public Submission evaluateCodingSubmission(Submission submission, String language) {
+        Question question = submission.getQuestion();
+        CodeExecutionRequest request = new CodeExecutionRequest();
+        request.setQuestionId(question.getId());
+        request.setLanguage(language != null
+                ? language
+                : question.getProgrammingLanguage() != null ? question.getProgrammingLanguage().name() : "PYTHON");
+        request.setCode(submission.getCodeSubmitted());
+        request.setRunHiddenTests(true);
+
+        CodeExecutionResponse execution = codingExecutionService.execute(request);
+        boolean isCorrect = Boolean.TRUE.equals(execution.getSuccess());
+        double scoreRatio = execution.getScorePercentage() == null ? 0.0 : execution.getScorePercentage() / 100.0;
+
+        submission.setIsCorrect(isCorrect);
+        submission.setMarksObtained(question.getMarks() * scoreRatio);
+        submission.setEvaluatedAt(LocalDateTime.now());
+        submission.setEvaluationDetails(String.format(
+                "Coding Question - %d/%d hidden tests passed | runtime=%sms | memory=%s bytes",
+                execution.getPassedCount(),
+                execution.getTotalCount(),
+                execution.getExecutionTime(),
+                execution.getMemoryUsed()));
+        submission.setUpdatedAt(LocalDateTime.now());
+        return submissionRepository.save(submission);
+    }
+
+    public void evaluateCodingSubmissionsForSession(Long testSessionId) {
+        List<Submission> submissions = submissionRepository.findByTestSessionId(testSessionId);
+        for (Submission submission : submissions) {
+            Question question = submission.getQuestion();
+            if (question.getType() == Question.QuestionType.CODING && submission.getCodeSubmitted() != null) {
+                evaluateCodingSubmission(submission,
+                        question.getProgrammingLanguage() != null ? question.getProgrammingLanguage().name() : null);
+            }
+        }
+    }
+
     /**
      * Descriptive questions are marked by recruiter manually
      * Store submission without auto-evaluation
@@ -119,6 +176,7 @@ public class EvaluationService {
         TestSession testSession = testSessionRepository.findById(testSessionId)
                 .orElseThrow(() -> new RuntimeException("Test session not found"));
 
+        evaluateCodingSubmissionsForSession(testSessionId);
         List<Submission> submissions = submissionRepository.findByTestSessionId(testSessionId);
         List<Question> questions = questionRepository.findByAssessmentId(
                 testSession.getAssessment().getId());

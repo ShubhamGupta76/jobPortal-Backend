@@ -8,18 +8,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CodeExecutionRequest {
+    private Long questionId;
+    private String sessionToken;
     private String language;
     private String code;
     private String input; // for test cases
+    private Boolean runHiddenTests;
 }
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-class CodeExecutionResponse {
-    private Boolean success;
-    private String output;
-    private String error;
-    private Long executionTime; // milliseconds
-    private Double memoryUsed; // MB
-}

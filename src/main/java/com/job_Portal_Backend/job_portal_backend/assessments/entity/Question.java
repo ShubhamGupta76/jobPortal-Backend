@@ -73,6 +73,21 @@ public class Question {
     @Column(columnDefinition = "TEXT")
     private String expectedOutput;
 
+    @Column(columnDefinition = "TEXT")
+    private String sampleTestCases;
+
+    @Column(columnDefinition = "TEXT")
+    private String hiddenTestCases;
+
+    @Column(columnDefinition = "TEXT")
+    private String functionSignature;
+
+    @Column(columnDefinition = "TEXT")
+    private String hiddenWrapperCode;
+
+    @Column(columnDefinition = "TEXT")
+    private String constraintsText;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -88,6 +103,6 @@ public class Question {
     }
 
     public enum ProgrammingLanguage {
-        JAVA, PYTHON, JAVASCRIPT, CPP, CSHARP, GO, RUST, SQL
+        JAVA, PYTHON, JAVASCRIPT, CPP, C, CSHARP, GO, RUST, SQL
     }
 }

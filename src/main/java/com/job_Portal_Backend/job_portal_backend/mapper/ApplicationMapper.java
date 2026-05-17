@@ -12,6 +12,10 @@ public class ApplicationMapper {
         dto.setId(application.getId());
         dto.setUserId(application.getUser().getId());
         dto.setUserName((application.getUser().getFirstName() + " " + application.getUser().getLastName()).trim());
+        dto.setUserEmail(application.getUser().getEmail());
+        dto.setUserPhone(application.getUser().getPhone());
+        dto.setUserLocation(application.getUser().getLocation());
+        dto.setUserHeadline(application.getUser().getHeadline());
         dto.setJobId(application.getJob().getId());
         dto.setJobTitle(application.getJob().getTitle());
         dto.setStatus(application.getStatus().name());
@@ -20,6 +24,7 @@ public class ApplicationMapper {
         dto.setResumePath(application.getResumePath());
         dto.setResumeDownloadUrl("/api/v1/files/resume/" + application.getUser().getId());
         dto.setCoverLetter(application.getCoverLetter());
+        dto.setSource(application.getSource());
         dto.setCreatedAt(application.getCreatedAt());
         dto.setUpdatedAt(application.getUpdatedAt());
         return dto;

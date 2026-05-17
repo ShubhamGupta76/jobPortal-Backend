@@ -28,6 +28,9 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
         @Query("SELECT a FROM Application a WHERE a.job.recruiter.id = :recruiterId AND a.isDeleted = false")
         Page<Application> findByJobRecruiterIdAndNotDeleted(@Param("recruiterId") Long recruiterId, Pageable pageable);
 
+        @Query("SELECT a FROM Application a WHERE a.job.recruiter.id = :recruiterId AND a.isDeleted = false")
+        List<Application> findAllByJobRecruiterIdAndNotDeleted(@Param("recruiterId") Long recruiterId);
+
         Optional<Application> findByUserIdAndJobId(Long userId, Long jobId);
 
         @Query("SELECT a FROM Application a WHERE a.user.id = :userId AND a.job.id = :jobId AND a.isDeleted = false")
@@ -41,10 +44,20 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
         @Query("SELECT a FROM Application a WHERE a.user.id = :userId AND a.resumePath IS NOT NULL AND a.isDeleted = false ORDER BY a.updatedAt DESC")
         List<Application> findResumeApplicationsByUserId(@Param("userId") Long userId);
 
+        @Query("SELECT a FROM Application a WHERE a.assignedAssessment.id = :assessmentId")
+        List<Application> findByAssignedAssessmentId(@Param("assessmentId") Long assessmentId);
+
         long countByUserId(Long userId);
 
         @Query("SELECT COUNT(a) FROM Application a WHERE a.user.id = :userId AND a.isDeleted = false")
         long countByUserIdAndNotDeleted(@Param("userId") Long userId);
+
+        @Query("SELECT COUNT(a) FROM Application a WHERE a.user.id = :userId AND a.isDeleted = false AND LOWER(a.status) = LOWER(:status)")
+        long countByUserIdAndStatusIgnoreCaseAndNotDeleted(@Param("userId") Long userId,
+                        @Param("status") String status);
+
+        @Query("SELECT COUNT(a) FROM Application a WHERE a.job.id = :jobId AND a.isDeleted = false")
+        long countByJobIdAndNotDeleted(@Param("jobId") Long jobId);
 
         long countByJobRecruiterId(Long recruiterId);
 

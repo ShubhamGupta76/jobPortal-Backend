@@ -12,16 +12,21 @@ public class JobMapper {
         dto.setId(job.getId());
         dto.setTitle(job.getTitle());
         dto.setDescription(job.getDescription());
+        dto.setDepartment(job.getDepartment());
         dto.setLocation(job.getLocation());
+        dto.setWorkplaceType(job.getWorkplaceType());
         dto.setJobType(job.getJobType());
         dto.setExperienceLevel(job.getExperienceLevel());
         dto.setMinSalary(job.getMinSalary());
         dto.setMaxSalary(job.getMaxSalary());
         dto.setSkills(job.getSkills());
-        dto.setCompanyId(job.getCompany().getId());
-        dto.setCompanyName(job.getCompany().getName());
-        dto.setRecruiterId(job.getRecruiter().getId());
-        dto.setRecruiterName((job.getRecruiter().getFirstName() + " " + job.getRecruiter().getLastName()).trim());
+        dto.setStatus(job.getStatus());
+        dto.setCompanyId(job.getCompany() != null ? job.getCompany().getId() : null);
+        dto.setCompanyName(job.getCompany() != null ? job.getCompany().getName() : null);
+        dto.setRecruiterId(job.getRecruiter() != null ? job.getRecruiter().getId() : null);
+        dto.setRecruiterName(job.getRecruiter() != null
+                ? (job.getRecruiter().getFirstName() + " " + job.getRecruiter().getLastName()).trim()
+                : null);
         dto.setCreatedAt(job.getCreatedAt());
         dto.setUpdatedAt(job.getUpdatedAt());
         return dto;

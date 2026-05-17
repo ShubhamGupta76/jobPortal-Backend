@@ -11,4 +11,6 @@ public interface ResultRepository extends JpaRepository<Result, Long> {
     Optional<Result> findByTestSessionId(Long testSessionId);
 
     List<Result> findByTestSessionAssessmentIdOrderByPercentageScoreDesc(Long assessmentId);
+
+    void deleteByTestSessionIdIn(List<Long> testSessionIds);
 }

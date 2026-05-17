@@ -6,9 +6,12 @@ import com.job_Portal_Backend.job_portal_backend.assessments.dto.AssessmentSumma
 import com.job_Portal_Backend.job_portal_backend.assessments.dto.QuestionDto;
 import com.job_Portal_Backend.job_portal_backend.assessments.entity.*;
 import com.job_Portal_Backend.job_portal_backend.assessments.entity.Assessment.AssessmentStatus;
+import com.job_Portal_Backend.job_portal_backend.entity.Application;
+import com.job_Portal_Backend.job_portal_backend.entity.Application.ApplicationStatus;
 import com.job_Portal_Backend.job_portal_backend.entity.Job;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.assessments.repository.*;
+import com.job_Portal_Backend.job_portal_backend.repository.ApplicationRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.JobRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,9 @@ public class AssessmentService {
 
     @Autowired
     private JobRepository jobRepository;
+
+    @Autowired
+    private ApplicationRepository applicationRepository;
 
     @Autowired
     private TestSessionRepository testSessionRepository;
@@ -54,6 +60,12 @@ public class AssessmentService {
         assessment.setDurationMinutes(dto.getDurationMinutes());
         assessment.setTotalMarks(dto.getTotalMarks());
         assessment.setPassingMarksPercentage(dto.getPassingMarksPercentage());
+        assessment.setShuffleQuestions(Boolean.TRUE.equals(dto.getShuffleQuestions()));
+        assessment.setAllowBackNavigation(Boolean.TRUE.equals(dto.getAllowBackNavigation()));
+        assessment.setEnableProctoring(Boolean.TRUE.equals(dto.getEnableProctoring()));
+        assessment.setDetectCopyPaste(Boolean.TRUE.equals(dto.getDetectCopyPaste()));
+        assessment.setEnforceFullScreen(Boolean.TRUE.equals(dto.getEnforceFullScreen()));
+        applySecuritySettings(assessment, dto);
         assessment.setStatus(AssessmentStatus.DRAFT);
         assessment.setCreatedAt(LocalDateTime.now());
         assessment.setUpdatedAt(LocalDateTime.now());
@@ -94,8 +106,52 @@ public class AssessmentService {
         existing.setEnableProctoring(updatedAssessment.getEnableProctoring());
         existing.setDetectCopyPaste(updatedAssessment.getDetectCopyPaste());
         existing.setEnforceFullScreen(updatedAssessment.getEnforceFullScreen());
+        existing.setRequireWebcam(updatedAssessment.getRequireWebcam());
+        existing.setDesktopOnly(updatedAssessment.getDesktopOnly());
+        existing.setSequentialQuestionsOnly(updatedAssessment.getSequentialQuestionsOnly());
+        existing.setLockAnsweredQuestions(updatedAssessment.getLockAnsweredQuestions());
+        existing.setAutoSubmitOnViolationLimit(updatedAssessment.getAutoSubmitOnViolationLimit());
+        existing.setFullscreenViolationLimit(updatedAssessment.getFullscreenViolationLimit());
+        existing.setTabSwitchLimit(updatedAssessment.getTabSwitchLimit());
+        existing.setOfflineGraceSeconds(updatedAssessment.getOfflineGraceSeconds());
+        existing.setMaxAttempts(updatedAssessment.getMaxAttempts());
         existing.setUpdatedAt(LocalDateTime.now());
         return assessmentRepository.save(existing);
+    }
+
+    public Assessment updateAssessment(Long assessmentId, AssessmentCreateRequest dto) {
+        Assessment existing = getAssessmentEntity(assessmentId);
+        if (dto.getJobId() != null && (existing.getJob() == null || !dto.getJobId().equals(existing.getJob().getId()))) {
+            Job job = jobRepository.findById(dto.getJobId())
+                    .orElseThrow(() -> new RuntimeException("Job not found: " + dto.getJobId()));
+            existing.setJob(job);
+        }
+
+        existing.setTitle(dto.getTitle());
+        existing.setDescription(dto.getDescription());
+        existing.setDurationMinutes(dto.getDurationMinutes());
+        existing.setTotalMarks(dto.getTotalMarks());
+        existing.setPassingMarksPercentage(dto.getPassingMarksPercentage());
+        existing.setShuffleQuestions(Boolean.TRUE.equals(dto.getShuffleQuestions()));
+        existing.setAllowBackNavigation(Boolean.TRUE.equals(dto.getAllowBackNavigation()));
+        existing.setEnableProctoring(Boolean.TRUE.equals(dto.getEnableProctoring()));
+        existing.setDetectCopyPaste(Boolean.TRUE.equals(dto.getDetectCopyPaste()));
+        existing.setEnforceFullScreen(Boolean.TRUE.equals(dto.getEnforceFullScreen()));
+        applySecuritySettings(existing, dto);
+        existing.setUpdatedAt(LocalDateTime.now());
+        return assessmentRepository.save(existing);
+    }
+
+    private void applySecuritySettings(Assessment assessment, AssessmentCreateRequest dto) {
+        assessment.setRequireWebcam(Boolean.TRUE.equals(dto.getRequireWebcam()));
+        assessment.setDesktopOnly(dto.getDesktopOnly() == null || Boolean.TRUE.equals(dto.getDesktopOnly()));
+        assessment.setSequentialQuestionsOnly(Boolean.TRUE.equals(dto.getSequentialQuestionsOnly()));
+        assessment.setLockAnsweredQuestions(Boolean.TRUE.equals(dto.getLockAnsweredQuestions()));
+        assessment.setAutoSubmitOnViolationLimit(dto.getAutoSubmitOnViolationLimit() == null || Boolean.TRUE.equals(dto.getAutoSubmitOnViolationLimit()));
+        assessment.setFullscreenViolationLimit(dto.getFullscreenViolationLimit() != null ? dto.getFullscreenViolationLimit() : 3);
+        assessment.setTabSwitchLimit(dto.getTabSwitchLimit() != null ? dto.getTabSwitchLimit() : 3);
+        assessment.setOfflineGraceSeconds(dto.getOfflineGraceSeconds() != null ? dto.getOfflineGraceSeconds() : 60);
+        assessment.setMaxAttempts(dto.getMaxAttempts() != null ? dto.getMaxAttempts() : 1);
     }
 
     public Assessment publishAssessment(Long assessmentId) {
@@ -120,9 +176,28 @@ public class AssessmentService {
 
     public void deleteAssessment(Long assessmentId) {
         Assessment assessment = getAssessmentEntity(assessmentId);
-        if (!assessment.getStatus().equals(AssessmentStatus.DRAFT)) {
-            throw new RuntimeException("Can only delete DRAFT assessments");
+
+        List<Application> assignedApplications = applicationRepository.findByAssignedAssessmentId(assessmentId);
+        for (Application application : assignedApplications) {
+            application.setAssignedAssessment(null);
+            if (application.getStatus() == ApplicationStatus.ASSESSMENT) {
+                application.setStatus(ApplicationStatus.SHORTLISTED);
+            }
         }
+        applicationRepository.saveAll(assignedApplications);
+
+        List<TestSession> sessions = testSessionRepository.findByAssessmentId(assessmentId);
+        List<Long> sessionIds = sessions.stream()
+                .map(TestSession::getId)
+                .toList();
+
+        if (!sessionIds.isEmpty()) {
+            proctoringLogRepository.deleteByTestSessionIdIn(sessionIds);
+            resultRepository.deleteByTestSessionIdIn(sessionIds);
+            submissionRepository.deleteByTestSessionIdIn(sessionIds);
+            testSessionRepository.deleteByAssessmentId(assessmentId);
+        }
+
         assessmentRepository.deleteById(assessmentId);
     }
 
@@ -156,13 +231,35 @@ public class AssessmentService {
         }
         existing.setTitle(updatedQuestion.getTitle());
         existing.setDescription(updatedQuestion.getDescription());
+        existing.setType(updatedQuestion.getType());
         existing.setMarks(updatedQuestion.getMarks());
+        existing.setSequenceNumber(updatedQuestion.getSequenceNumber() != null ? updatedQuestion.getSequenceNumber() : existing.getSequenceNumber());
         existing.setDifficulty(updatedQuestion.getDifficulty());
+        existing.setOption1(updatedQuestion.getOption1());
+        existing.setOption2(updatedQuestion.getOption2());
+        existing.setOption3(updatedQuestion.getOption3());
+        existing.setOption4(updatedQuestion.getOption4());
+        existing.setCorrectAnswer(updatedQuestion.getCorrectAnswer());
+        existing.setExplanation(updatedQuestion.getExplanation());
+        existing.setCodeTemplate(updatedQuestion.getCodeTemplate());
+        existing.setProgrammingLanguage(updatedQuestion.getProgrammingLanguage());
+        existing.setTestCases(updatedQuestion.getTestCases());
+        existing.setExpectedOutput(updatedQuestion.getExpectedOutput());
+        existing.setSampleTestCases(updatedQuestion.getSampleTestCases());
+        existing.setHiddenTestCases(updatedQuestion.getHiddenTestCases());
+        existing.setFunctionSignature(updatedQuestion.getFunctionSignature());
+        existing.setHiddenWrapperCode(updatedQuestion.getHiddenWrapperCode());
+        existing.setConstraintsText(updatedQuestion.getConstraintsText());
         existing.setUpdatedAt(LocalDateTime.now());
         return questionRepository.save(existing);
     }
 
     public void deleteQuestion(Long questionId) {
         questionRepository.deleteById(questionId);
+    }
+
+    public Question getQuestionEntity(Long questionId) {
+        return questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
     }
 }

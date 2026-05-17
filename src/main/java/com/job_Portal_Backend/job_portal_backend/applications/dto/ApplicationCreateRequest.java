@@ -13,5 +13,7 @@ public class ApplicationCreateRequest {
 
     private String coverLetter;
 
+    private String source;
+
     private MultipartFile resume;
 }

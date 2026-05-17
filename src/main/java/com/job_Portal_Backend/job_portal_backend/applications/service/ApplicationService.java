@@ -1,7 +1,11 @@
 package com.job_Portal_Backend.job_portal_backend.applications.service;
 
 import com.job_Portal_Backend.job_portal_backend.assessments.entity.Assessment;
+import com.job_Portal_Backend.job_portal_backend.assessments.entity.Result;
+import com.job_Portal_Backend.job_portal_backend.assessments.entity.TestSession;
 import com.job_Portal_Backend.job_portal_backend.assessments.repository.AssessmentRepository;
+import com.job_Portal_Backend.job_portal_backend.assessments.repository.ResultRepository;
+import com.job_Portal_Backend.job_portal_backend.assessments.repository.TestSessionRepository;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationCreateRequest;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationDto;
 import com.job_Portal_Backend.job_portal_backend.entity.Application;
@@ -32,6 +36,8 @@ public class ApplicationService {
     private final ApplicationRepository applicationRepository;
     private final JobRepository jobRepository;
     private final AssessmentRepository assessmentRepository;
+    private final TestSessionRepository testSessionRepository;
+    private final ResultRepository resultRepository;
     private final ApplicationMapper applicationMapper;
     private final NotificationService notificationService;
 
@@ -41,11 +47,15 @@ public class ApplicationService {
             ApplicationRepository applicationRepository,
             JobRepository jobRepository,
             AssessmentRepository assessmentRepository,
+            TestSessionRepository testSessionRepository,
+            ResultRepository resultRepository,
             ApplicationMapper applicationMapper,
             NotificationService notificationService) {
         this.applicationRepository = applicationRepository;
         this.jobRepository = jobRepository;
         this.assessmentRepository = assessmentRepository;
+        this.testSessionRepository = testSessionRepository;
+        this.resultRepository = resultRepository;
         this.applicationMapper = applicationMapper;
         this.notificationService = notificationService;
     }
@@ -65,6 +75,7 @@ public class ApplicationService {
         application.setJob(job);
         application.setStatus(ApplicationStatus.APPLIED);
         application.setCoverLetter(request.getCoverLetter());
+        application.setSource(normalizeSource(request.getSource()));
 
         if (request.getResume() != null && !request.getResume().isEmpty()) {
             String fileName = UUID.randomUUID().toString() + "_" + request.getResume().getOriginalFilename();
@@ -87,7 +98,7 @@ public class ApplicationService {
                 "Application submitted",
                 "Your application for " + job.getTitle() + " has been submitted.",
                 application.getId().toString());
-        return applicationMapper.toDto(application);
+        return toDto(application);
     }
 
     public ApplicationDto updateApplicationStatus(Long applicationId, String status, User recruiter) {
@@ -112,7 +123,7 @@ public class ApplicationService {
                 "APPLICATION_STATUS",
                 application.getId(),
                 "APPLICATION");
-        return applicationMapper.toDto(application);
+        return toDto(application);
     }
 
     public ApplicationDto assignAssessment(Long jobId, Long candidateId, Long assessmentId, User recruiter) {
@@ -145,18 +156,18 @@ public class ApplicationService {
                 "ASSESSMENT",
                 application.getId(),
                 "APPLICATION");
-        return applicationMapper.toDto(application);
+        return toDto(application);
     }
 
     public List<ApplicationDto> getApplicationsByUser(User user) {
         List<Application> applications = applicationRepository.findByUserIdAndNotDeleted(user.getId());
-        return applications.stream().map(applicationMapper::toDto).collect(Collectors.toList());
+        return applications.stream().map(this::toDto).collect(Collectors.toList());
     }
 
     public Page<ApplicationDto> getApplicationsByRecruiter(User recruiter, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Application> applications = applicationRepository.findByJobRecruiterIdAndNotDeleted(recruiter.getId(), pageable);
-        return applications.map(applicationMapper::toDto);
+        return applications.map(this::toDto);
     }
 
     public List<ApplicationDto> getApplicationsByJob(Long jobId, User recruiter) {
@@ -168,7 +179,38 @@ public class ApplicationService {
         }
 
         List<Application> applications = applicationRepository.findByJobIdAndNotDeleted(jobId);
-        return applications.stream().map(applicationMapper::toDto).collect(Collectors.toList());
+        return applications.stream()
+                .sorted((first, second) -> second.getCreatedAt().compareTo(first.getCreatedAt()))
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    private ApplicationDto toDto(Application application) {
+        ApplicationDto dto = applicationMapper.toDto(application);
+
+        if (application.getAssignedAssessment() == null) {
+            return dto;
+        }
+
+        List<TestSession> sessions = testSessionRepository.findByAssessmentIdAndCandidateId(
+                application.getAssignedAssessment().getId(),
+                application.getUser().getId());
+
+        sessions.stream()
+                .max((first, second) -> first.getUpdatedAt().compareTo(second.getUpdatedAt()))
+                .ifPresent(session -> {
+                    dto.setAssessmentSessionId(session.getId());
+                    Optional<Result> result = resultRepository.findByTestSessionId(session.getId());
+                    result.ifPresent(value -> {
+                        dto.setAssessmentScore(value.getPercentageScore());
+                        dto.setAssessmentPassed(value.getPassed());
+                        dto.setCorrectAnswers(value.getCorrectAnswers());
+                        dto.setTotalQuestions(value.getTotalQuestions());
+                        dto.setAssessmentAnalysis(value.getDetailedAnalysis());
+                    });
+                });
+
+        return dto;
     }
 
     private ApplicationStatus parseStatus(String status) {
@@ -221,12 +263,13 @@ public class ApplicationService {
             Assessment assessment = assessmentRepository.findById(assessmentId)
                     .orElseThrow(() -> new ResourceNotFoundException("Assessment not found"));
 
-            if (assessment.getJob() == null || !assessment.getJob().getId().equals(jobId)) {
-                throw new RuntimeException("Assessment does not belong to the selected job");
-            }
-
             if (!assessment.getRecruiter().getId().equals(recruiterId)) {
                 throw new RuntimeException("Unauthorized to assign this assessment");
+            }
+
+            if (assessment.getStatus() != Assessment.AssessmentStatus.PUBLISHED
+                    && assessment.getStatus() != Assessment.AssessmentStatus.LIVE) {
+                throw new RuntimeException("Only published assessments can be assigned to candidates");
             }
 
             return assessment;
@@ -235,5 +278,13 @@ public class ApplicationService {
         return assessmentRepository.findAssignableAssessmentsByJobId(jobId).stream()
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("No published assessment found for this job"));
+    }
+
+    private String normalizeSource(String source) {
+        if (source == null || source.isBlank()) {
+            return "DIRECT";
+        }
+
+        return source.trim().replace(' ', '_').toUpperCase();
     }
 }

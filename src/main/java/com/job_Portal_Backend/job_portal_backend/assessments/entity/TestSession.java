@@ -50,6 +50,18 @@ public class TestSession {
     @Column(columnDefinition = "TEXT")
     private String ipAddress;
 
+    @Column(columnDefinition = "TEXT")
+    private String deviceFingerprint;
+
+    @Column(nullable = false)
+    private Integer fullscreenViolationCount = 0;
+
+    @Column(nullable = false)
+    private Integer tabSwitchCount = 0;
+
+    @Column(nullable = false)
+    private Integer securityViolationCount = 0;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

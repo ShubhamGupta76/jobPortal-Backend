@@ -33,6 +33,11 @@ public class QuestionDto {
     private ProgrammingLanguage programmingLanguage;
     private String testCases;
     private String expectedOutput;
+    private String sampleTestCases;
+    private String hiddenTestCases;
+    private String functionSignature;
+    private String hiddenWrapperCode;
+    private String constraintsText;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -61,6 +66,11 @@ public class QuestionDto {
         dto.setProgrammingLanguage(question.getProgrammingLanguage());
         dto.setTestCases(question.getTestCases());
         dto.setExpectedOutput(question.getExpectedOutput());
+        dto.setSampleTestCases(question.getSampleTestCases());
+        dto.setHiddenTestCases(question.getHiddenTestCases());
+        dto.setFunctionSignature(question.getFunctionSignature());
+        dto.setHiddenWrapperCode(question.getHiddenWrapperCode());
+        dto.setConstraintsText(question.getConstraintsText());
         dto.setCreatedAt(question.getCreatedAt());
         dto.setUpdatedAt(question.getUpdatedAt());
         return dto;

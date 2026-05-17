@@ -13,8 +13,12 @@ public class JobCreateRequest {
     @NotBlank(message = "Description is required")
     private String description;
 
+    private String department;
+
     @NotBlank(message = "Location is required")
     private String location;
+
+    private String workplaceType;
 
     @NotBlank(message = "Job type is required")
     private String jobType;

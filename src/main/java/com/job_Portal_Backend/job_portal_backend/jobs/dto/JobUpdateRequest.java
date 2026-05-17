@@ -7,7 +7,9 @@ public class JobUpdateRequest {
 
     private String title;
     private String description;
+    private String department;
     private String location;
+    private String workplaceType;
     private String jobType;
     private String experienceLevel;
     private Double minSalary;

@@ -21,4 +21,6 @@ public class SubmitAnswerRequest {
 
     private String answerText;
     private String codeSubmitted;
+    private String language;
+    private Boolean evaluate;
 }

@@ -34,7 +34,22 @@ public class ProctoringService {
         log.setMetadata(metadata);
         log.setCreatedAt(LocalDateTime.now());
 
+        updateSessionSecurityCounters(testSession, activityType, severityScore);
         return proctoringLogRepository.save(log);
+    }
+
+    private void updateSessionSecurityCounters(TestSession testSession, String activityType, Integer severityScore) {
+        if ("FULLSCREEN_EXIT".equals(activityType)) {
+            testSession.setFullscreenViolationCount(testSession.getFullscreenViolationCount() + 1);
+        }
+        if ("TAB_SWITCH".equals(activityType) || "WINDOW_BLUR".equals(activityType)) {
+            testSession.setTabSwitchCount(testSession.getTabSwitchCount() + 1);
+        }
+        if (severityScore != null && severityScore >= 70) {
+            testSession.setSecurityViolationCount(testSession.getSecurityViolationCount() + 1);
+        }
+        testSession.setUpdatedAt(LocalDateTime.now());
+        testSessionRepository.save(testSession);
     }
 
     /**
@@ -107,6 +122,12 @@ public class ProctoringService {
         KEYBOARD_INACTIVE,
         CAMERA_DETECTED_MISSING,
         BACKGROUND_NOISE,
-        FACE_NOT_DETECTED
+        FACE_NOT_DETECTED,
+        FULLSCREEN_EXIT,
+        RIGHT_CLICK,
+        TEXT_SELECTION,
+        DEVTOOLS_ATTEMPT,
+        INTERNET_DISCONNECT,
+        MULTIPLE_DEVICE_ATTEMPT
     }
 }

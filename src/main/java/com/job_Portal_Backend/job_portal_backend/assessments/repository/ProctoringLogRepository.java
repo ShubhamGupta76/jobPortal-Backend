@@ -10,4 +10,6 @@ public interface ProctoringLogRepository extends JpaRepository<ProctoringLog, Lo
     List<ProctoringLog> findByTestSessionId(Long testSessionId);
 
     Long countByTestSessionIdAndSeverityScoreGreaterThan(Long testSessionId, Integer severityScore);
+
+    void deleteByTestSessionIdIn(List<Long> testSessionIds);
 }

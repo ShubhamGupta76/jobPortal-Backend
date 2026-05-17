@@ -4,19 +4,19 @@ import com.job_Portal_Backend.job_portal_backend.auth.dto.AuthResponse;
 import com.job_Portal_Backend.job_portal_backend.auth.dto.LoginRequest;
 import com.job_Portal_Backend.job_portal_backend.auth.dto.RegisterRequest;
 import com.job_Portal_Backend.job_portal_backend.auth.service.AuthService;
-import com.job_Portal_Backend.job_portal_backend.config.JwtService;
 import com.job_Portal_Backend.job_portal_backend.dto.ApiResponse;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
-import com.job_Portal_Backend.job_portal_backend.exception.ResourceNotFoundException;
 import com.job_Portal_Backend.job_portal_backend.otp.OtpService;
 import com.job_Portal_Backend.job_portal_backend.otp.dto.SendOtpRequest;
 import com.job_Portal_Backend.job_portal_backend.otp.dto.VerifyOtpRequest;
-import com.job_Portal_Backend.job_portal_backend.repository.UserRepository;
 import com.job_Portal_Backend.job_portal_backend.util.RoleUtils;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -25,12 +25,6 @@ public class AuthController {
 
     @Autowired
     private AuthService authService;
-
-    @Autowired
-    private JwtService jwtService;
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private OtpService otpService;
@@ -74,10 +68,11 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(@RequestHeader("Authorization") String token) {
-        String email = jwtService.extractUsername(token.substring(7));
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    public ResponseEntity<ApiResponse<AuthResponse>> getCurrentUser(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+
         String role = RoleUtils.resolvePrimaryRole(user.getRoles());
         AuthResponse response = new AuthResponse("",
                 "Bearer",

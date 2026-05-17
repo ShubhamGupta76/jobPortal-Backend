@@ -102,4 +102,17 @@ public class JobController {
         List<JobDto> jobs = jobService.getJobsByRecruiter(recruiter);
         return ResponseEntity.ok(new ApiResponse<>(true, "Jobs retrieved successfully", jobs));
     }
+
+    @PostMapping("/archive-old")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<ApiResponse<Integer>> archiveOldJobs(
+            @RequestHeader("Authorization") String token,
+            @RequestParam(defaultValue = "90") int days) {
+        String email = jwtService.extractUsername(token.substring(7));
+        User recruiter = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        int archivedCount = jobService.archiveOldJobs(recruiter, days);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Old jobs archived successfully", archivedCount));
+    }
 }

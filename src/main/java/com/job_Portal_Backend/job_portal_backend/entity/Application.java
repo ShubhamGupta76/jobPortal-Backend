@@ -42,6 +42,9 @@ public class Application {
     @Column(length = 2000)
     private String coverLetter;
 
+    @Column(nullable = false, length = 100)
+    private String source = "DIRECT";
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -108,6 +111,14 @@ public class Application {
         this.coverLetter = coverLetter;
     }
 
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -136,6 +147,9 @@ public class Application {
     protected void onCreate() {
         if (status == null) {
             status = ApplicationStatus.APPLIED;
+        }
+        if (source == null || source.isBlank()) {
+            source = "DIRECT";
         }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();

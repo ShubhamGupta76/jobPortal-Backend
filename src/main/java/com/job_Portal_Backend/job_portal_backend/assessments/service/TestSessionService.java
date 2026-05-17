@@ -6,12 +6,15 @@ import com.job_Portal_Backend.job_portal_backend.assessments.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
 @Transactional
 public class TestSessionService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Autowired
     private TestSessionRepository testSessionRepository;
@@ -26,28 +29,55 @@ public class TestSessionService {
      * Start a new test session for candidate.
      * Generates unique session token, records browser/IP info for proctoring.
      */
-    public TestSession startTestSession(Long assessmentId, Long candidateId, String userAgent, String ipAddress) {
+    public TestSession startTestSession(Long assessmentId, Long candidateId, String userAgent, String ipAddress,
+            String deviceFingerprint) {
         System.out.println("Service - Assessment ID: " + assessmentId + ", Candidate ID: " + candidateId);
 
         Assessment assessment = assessmentRepository.findById(assessmentId)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
 
-        // Check for existing session (not EXPIRED or EVALUATED)
         List<TestSession> sessions = testSessionRepository.findByAssessmentIdAndCandidateId(assessmentId, candidateId);
-        Optional<TestSession> existing = sessions.stream()
-                .filter(s -> !s.getStatus().equals(TestSession.SessionStatus.EXPIRED)
-                        && !s.getStatus().equals(TestSession.SessionStatus.EVALUATED))
-                .findFirst();
-        if (existing.isPresent()) {
-            System.out.println("Returning existing session: " + existing.get().getId());
-            return existing.get();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (TestSession session : sessions) {
+            if (isActiveStatus(session) && session.getExpiresAt() != null && now.isAfter(session.getExpiresAt())) {
+                session.setStatus(TestSession.SessionStatus.EXPIRED);
+                session.setUpdatedAt(now);
+                testSessionRepository.save(session);
+            }
         }
 
-        // Prevent multiple concurrent IN_PROGRESS sessions (additional safety)
-        for (TestSession session : sessions) {
-            if (session.getStatus().equals(TestSession.SessionStatus.IN_PROGRESS)) {
-                throw new RuntimeException("Candidate already has an active session for this assessment");
+        Optional<TestSession> completedOrExpiredAttempt = sessions.stream()
+                .filter(s -> s.getStatus().equals(TestSession.SessionStatus.SUBMITTED)
+                        || s.getStatus().equals(TestSession.SessionStatus.EVALUATED)
+                        || s.getStatus().equals(TestSession.SessionStatus.EXPIRED))
+                .findFirst();
+        if (completedOrExpiredAttempt.isPresent()) {
+            throw new RuntimeException("Candidate has already used the allowed attempt for this assessment");
+        }
+
+        Optional<TestSession> activeAttempt = sessions.stream()
+                .filter(this::isActiveStatus)
+                .findFirst();
+        if (activeAttempt.isPresent()) {
+            TestSession session = activeAttempt.get();
+            if (hasText(session.getDeviceFingerprint()) && hasText(deviceFingerprint)
+                    && !session.getDeviceFingerprint().equals(deviceFingerprint)) {
+                throw new RuntimeException("Assessment is already active on another device or browser");
             }
+
+            if (!hasText(session.getDeviceFingerprint()) && hasText(deviceFingerprint)) {
+                session.setDeviceFingerprint(deviceFingerprint);
+            }
+            session.setUserAgent(userAgent);
+            session.setIpAddress(ipAddress);
+            session.setUpdatedAt(now);
+            System.out.println("Resuming existing session: " + session.getId());
+            return testSessionRepository.save(session);
+        }
+
+        if (sessions.size() >= assessment.getMaxAttempts()) {
+            throw new RuntimeException("Candidate has already used the allowed attempt for this assessment");
         }
 
         // Create new session with unique token
@@ -60,13 +90,14 @@ public class TestSessionService {
         session.setStatus(TestSession.SessionStatus.NOT_STARTED);
         session.setUserAgent(userAgent);
         session.setIpAddress(ipAddress);
-        session.setStartedAt(LocalDateTime.now());
-        session.setCreatedAt(LocalDateTime.now());
-        session.setUpdatedAt(LocalDateTime.now());
+        session.setDeviceFingerprint(deviceFingerprint);
+        session.setStartedAt(now);
+        session.setCreatedAt(now);
+        session.setUpdatedAt(now);
 
         // Calculate expiry: now + assessment duration (with 5 min buffer)
         Integer durationMinutes = assessment.getDurationMinutes();
-        session.setExpiresAt(LocalDateTime.now().plusMinutes(durationMinutes + 5));
+        session.setExpiresAt(now.plusMinutes(durationMinutes + 5));
 
         return testSessionRepository.save(session);
     }
@@ -161,11 +192,19 @@ public class TestSessionService {
      */
     private String generateSecureToken() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        Random random = new Random();
         StringBuilder token = new StringBuilder();
         for (int i = 0; i < 40; i++) {
-            token.append(chars.charAt(random.nextInt(chars.length())));
+            token.append(chars.charAt(SECURE_RANDOM.nextInt(chars.length())));
         }
         return token.toString();
+    }
+
+    private boolean isActiveStatus(TestSession session) {
+        return session.getStatus().equals(TestSession.SessionStatus.IN_PROGRESS)
+                || session.getStatus().equals(TestSession.SessionStatus.NOT_STARTED);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

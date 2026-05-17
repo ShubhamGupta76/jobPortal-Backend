@@ -29,7 +29,9 @@ public class Job {
     @Column(length = 5000)
     private String description;
 
+    private String department;
     private String location;
+    private String workplaceType; // ON_SITE, REMOTE, HYBRID
     private String jobType; // FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP
     private String experienceLevel; // ENTRY, MID, SENIOR, EXECUTIVE
     private Double minSalary;

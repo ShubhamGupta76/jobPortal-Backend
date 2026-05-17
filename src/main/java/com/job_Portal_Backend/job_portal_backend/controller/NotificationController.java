@@ -1,13 +1,12 @@
 package com.job_Portal_Backend.job_portal_backend.controller;
 
-import com.job_Portal_Backend.job_portal_backend.config.JwtService;
 import com.job_Portal_Backend.job_portal_backend.dto.ApiResponse;
 import com.job_Portal_Backend.job_portal_backend.dto.NotificationDto;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.service.NotificationService;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,18 +17,16 @@ import java.util.List;
 public class NotificationController {
 
     private final NotificationService notificationService;
-    private final JwtService jwtService;
 
-    public NotificationController(NotificationService notificationService, JwtService jwtService) {
+    public NotificationController(NotificationService notificationService) {
         this.notificationService = notificationService;
-        this.jwtService = jwtService;
     }
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<NotificationDto>>> getNotifications(
-            @RequestHeader("Authorization") String token) {
-        User user = jwtService.getCurrentUser();
+            Authentication authentication) {
+        User user = currentUser(authentication);
         List<NotificationDto> notifications = notificationService.getUserNotifications(user, false);
         return ResponseEntity.ok(new ApiResponse<>(true, "Notifications retrieved successfully", notifications));
     }
@@ -37,16 +34,16 @@ public class NotificationController {
     @GetMapping("/unread")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<NotificationDto>>> getUnreadNotifications(
-            @RequestHeader("Authorization") String token) {
-        User user = jwtService.getCurrentUser();
+            Authentication authentication) {
+        User user = currentUser(authentication);
         List<NotificationDto> notifications = notificationService.getUserNotifications(user, true);
         return ResponseEntity.ok(new ApiResponse<>(true, "Unread notifications retrieved successfully", notifications));
     }
 
     @GetMapping("/count")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<Long>> getUnreadCount(@RequestHeader("Authorization") String token) {
-        User user = jwtService.getCurrentUser();
+    public ResponseEntity<ApiResponse<Long>> getUnreadCount(Authentication authentication) {
+        User user = currentUser(authentication);
         long count = notificationService.getUnreadNotificationCount(user);
         return ResponseEntity.ok(new ApiResponse<>(true, "Unread count retrieved successfully", count));
     }
@@ -54,18 +51,24 @@ public class NotificationController {
     @PutMapping("/{notificationId}/read")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<NotificationDto>> markAsRead(@PathVariable Long notificationId,
-            @RequestHeader("Authorization") String token) {
-        User user = jwtService.getCurrentUser();
+            Authentication authentication) {
+        User user = currentUser(authentication);
         NotificationDto notification = notificationService.markNotificationAsRead(notificationId, user);
         return ResponseEntity.ok(new ApiResponse<>(true, "Notification marked as read", notification));
     }
 
     @PutMapping("/read-all")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<String>> markAllAsRead(@RequestHeader("Authorization") String token) {
-        User user = jwtService.getCurrentUser();
+    public ResponseEntity<ApiResponse<String>> markAllAsRead(Authentication authentication) {
+        User user = currentUser(authentication);
         notificationService.markAllNotificationsAsRead(user);
         return ResponseEntity.ok(new ApiResponse<>(true, "All notifications marked as read", "Success"));
     }
 
+    private User currentUser(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            throw new RuntimeException("Authenticated user not found");
+        }
+        return user;
+    }
 }

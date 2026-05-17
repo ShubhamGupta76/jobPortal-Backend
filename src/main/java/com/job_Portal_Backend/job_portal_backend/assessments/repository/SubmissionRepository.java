@@ -13,4 +13,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     Optional<Submission> findByTestSessionIdAndQuestionId(Long testSessionId, Long questionId);
 
     Long countByTestSessionIdAndIsCorrectTrue(Long testSessionId);
+
+    void deleteByTestSessionIdIn(List<Long> testSessionIds);
 }

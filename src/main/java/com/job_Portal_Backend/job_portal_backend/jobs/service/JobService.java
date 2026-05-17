@@ -11,11 +11,13 @@ import com.job_Portal_Backend.job_portal_backend.jobs.dto.JobFilterRequest;
 import com.job_Portal_Backend.job_portal_backend.jobs.dto.SearchSuggestionsResponse;
 import com.job_Portal_Backend.job_portal_backend.jobs.dto.JobUpdateRequest;
 import com.job_Portal_Backend.job_portal_backend.mapper.JobMapper;
+import com.job_Portal_Backend.job_portal_backend.repository.ApplicationRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.CompanyRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.JobRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,11 +26,17 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final CompanyRepository companyRepository;
+    private final ApplicationRepository applicationRepository;
     private final JobMapper jobMapper;
 
-    public JobService(JobRepository jobRepository, CompanyRepository companyRepository, JobMapper jobMapper) {
+    public JobService(
+            JobRepository jobRepository,
+            CompanyRepository companyRepository,
+            ApplicationRepository applicationRepository,
+            JobMapper jobMapper) {
         this.jobRepository = jobRepository;
         this.companyRepository = companyRepository;
+        this.applicationRepository = applicationRepository;
         this.jobMapper = jobMapper;
     }
 
@@ -39,7 +47,9 @@ public class JobService {
         Job job = new Job();
         job.setTitle(request.getTitle());
         job.setDescription(request.getDescription());
+        job.setDepartment(request.getDepartment());
         job.setLocation(request.getLocation());
+        job.setWorkplaceType(request.getWorkplaceType());
         job.setJobType(request.getJobType());
         job.setExperienceLevel(request.getExperienceLevel());
         job.setMinSalary(request.getMinSalary());
@@ -66,8 +76,12 @@ public class JobService {
             job.setTitle(request.getTitle());
         if (request.getDescription() != null)
             job.setDescription(request.getDescription());
+        if (request.getDepartment() != null)
+            job.setDepartment(request.getDepartment());
         if (request.getLocation() != null)
             job.setLocation(request.getLocation());
+        if (request.getWorkplaceType() != null)
+            job.setWorkplaceType(request.getWorkplaceType());
         if (request.getJobType() != null)
             job.setJobType(request.getJobType());
         if (request.getExperienceLevel() != null)
@@ -148,7 +162,30 @@ public class JobService {
 
     public List<JobDto> getJobsByRecruiter(User recruiter) {
         List<Job> jobs = jobRepository.findByRecruiterIdAndNotDeleted(recruiter.getId());
-        return jobs.stream().map(jobMapper::toDto).collect(Collectors.toList());
+        return jobs.stream()
+                .map(job -> {
+                    JobDto dto = jobMapper.toDto(job);
+                    dto.setApplicationCount(applicationRepository.countByJobIdAndNotDeleted(job.getId()));
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+    public int archiveOldJobs(User recruiter, int olderThanDays) {
+        LocalDateTime threshold = LocalDateTime.now().minusDays(Math.max(olderThanDays, 1));
+        List<Job> jobs = jobRepository.findByRecruiterIdAndNotDeleted(recruiter.getId());
+
+        List<Job> jobsToArchive = jobs.stream()
+                .filter(job -> job.getCreatedAt() != null && job.getCreatedAt().isBefore(threshold))
+                .filter(job -> job.getStatus() == null || !"CLOSED".equalsIgnoreCase(job.getStatus()))
+                .toList();
+
+        jobsToArchive.forEach(job -> job.setStatus("CLOSED"));
+        if (!jobsToArchive.isEmpty()) {
+            jobRepository.saveAll(jobsToArchive);
+        }
+
+        return jobsToArchive.size();
     }
 
     public SearchSuggestionsResponse getSearchSuggestions(String keyword) {

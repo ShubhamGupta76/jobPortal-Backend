@@ -79,9 +79,16 @@ public class AssessmentController {
      * Recruiter updates assessment (only if DRAFT)
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('RECRUITER')")
     public ResponseEntity<AssessmentDto> updateAssessment(@PathVariable Long id,
-            @RequestBody Assessment assessment) {
-        Assessment updatedEntity = assessmentService.updateAssessment(id, assessment);
+            @RequestBody AssessmentCreateRequest assessment,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Assessment existing = assessmentService.getAssessmentEntity(id);
+        if (!recruiter.getId().equals(existing.getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to update this assessment");
+        }
+        assessmentService.updateAssessment(id, assessment);
         return ResponseEntity.ok(assessmentService.getAssessmentDetails(id));
     }
 
@@ -90,7 +97,14 @@ public class AssessmentController {
      * Recruiter publishes assessment to make visible to candidates
      */
     @PostMapping("/{id}/publish")
-    public ResponseEntity<AssessmentDto> publishAssessment(@PathVariable Long id) {
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<AssessmentDto> publishAssessment(@PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Assessment existing = assessmentService.getAssessmentEntity(id);
+        if (!recruiter.getId().equals(existing.getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to publish this assessment");
+        }
         assessmentService.publishAssessment(id);
         return ResponseEntity.ok(assessmentService.getAssessmentDetails(id));
     }
@@ -100,7 +114,14 @@ public class AssessmentController {
      * Recruiter closes assessment (no more new attempts)
      */
     @PostMapping("/{id}/close")
-    public ResponseEntity<AssessmentDto> closeAssessment(@PathVariable Long id) {
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<AssessmentDto> closeAssessment(@PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Assessment existing = assessmentService.getAssessmentEntity(id);
+        if (!recruiter.getId().equals(existing.getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to close this assessment");
+        }
         assessmentService.closeAssessment(id);
         return ResponseEntity.ok(assessmentService.getAssessmentDetails(id));
     }
@@ -110,7 +131,14 @@ public class AssessmentController {
      * Delete assessment (only DRAFT)
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAssessment(@PathVariable Long id) {
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<Void> deleteAssessment(@PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Assessment existing = assessmentService.getAssessmentEntity(id);
+        if (!recruiter.getId().equals(existing.getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to delete this assessment");
+        }
         assessmentService.deleteAssessment(id);
         return ResponseEntity.noContent().build();
     }
@@ -143,6 +171,36 @@ public class AssessmentController {
         question.setAssessment(assessment);
         Question created = assessmentService.addQuestion(question);
         return ResponseEntity.ok(created);
+    }
+
+    @PutMapping("/questions/{questionId}")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<Question> updateQuestion(
+            @PathVariable Long questionId,
+            @RequestBody Question question,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Question existing = assessmentService.getQuestionEntity(questionId);
+        if (!recruiter.getId().equals(existing.getAssessment().getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to update this question");
+        }
+        question.setAssessment(existing.getAssessment());
+        question.setId(existing.getId());
+        return ResponseEntity.ok(assessmentService.updateQuestion(questionId, question));
+    }
+
+    @DeleteMapping("/questions/{questionId}")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<Void> deleteQuestion(
+            @PathVariable Long questionId,
+            @RequestHeader("Authorization") String token) {
+        User recruiter = resolveUser(token);
+        Question existing = assessmentService.getQuestionEntity(questionId);
+        if (!recruiter.getId().equals(existing.getAssessment().getRecruiter().getId())) {
+            throw new RuntimeException("Not authorized to delete this question");
+        }
+        assessmentService.deleteQuestion(questionId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/assign")

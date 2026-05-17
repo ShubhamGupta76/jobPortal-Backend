@@ -8,12 +8,16 @@ public class JobDto {
     private Long id;
     private String title;
     private String description;
+    private String department;
     private String location;
+    private String workplaceType;
     private String jobType;
     private String experienceLevel;
     private Double minSalary;
     private Double maxSalary;
     private String skills;
+    private String status;
+    private Long applicationCount;
     private Long companyId;
     private String companyName;
     private Long recruiterId;

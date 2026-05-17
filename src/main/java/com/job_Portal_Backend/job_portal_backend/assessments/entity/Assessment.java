@@ -63,6 +63,33 @@ public class Assessment {
     @Column(nullable = false)
     private Boolean enforceFullScreen = false;
 
+    @Column(nullable = false)
+    private Boolean requireWebcam = false;
+
+    @Column(nullable = false)
+    private Boolean desktopOnly = true;
+
+    @Column(nullable = false)
+    private Boolean sequentialQuestionsOnly = false;
+
+    @Column(nullable = false)
+    private Boolean lockAnsweredQuestions = false;
+
+    @Column(nullable = false)
+    private Boolean autoSubmitOnViolationLimit = true;
+
+    @Column(nullable = false)
+    private Integer fullscreenViolationLimit = 3;
+
+    @Column(nullable = false)
+    private Integer tabSwitchLimit = 3;
+
+    @Column(nullable = false)
+    private Integer offlineGraceSeconds = 60;
+
+    @Column(nullable = false)
+    private Integer maxAttempts = 1;
+
     @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Question> questions = new ArrayList<>();
 
