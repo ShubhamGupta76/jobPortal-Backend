@@ -8,11 +8,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface OtpRepository extends JpaRepository<Otp, Long> {
     Optional<Otp> findByEmailAndVerifiedFalseAndExpiryTimeAfter(String email, LocalDateTime now);
+
+    List<Otp> findByEmailAndVerifiedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(String email, LocalDateTime now);
 
     boolean existsByEmailAndExpiryTimeAfter(String email, LocalDateTime now);
 

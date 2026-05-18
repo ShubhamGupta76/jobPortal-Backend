@@ -39,6 +39,10 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        if (Boolean.TRUE.equals(user.getIsDeleted()) || Boolean.TRUE.equals(user.getIsBlocked())) {
+            throw new RuntimeException("This account has been blocked or deleted");
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid credentials");
         }
@@ -49,6 +53,10 @@ public class AuthService {
     public AuthResponse completeLoginAfterOtp(String email) {
         User user = userRepository.findByEmailAndIsEmailVerifiedTrueAndIsDeletedFalse(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found or email not verified"));
+
+        if (Boolean.TRUE.equals(user.getIsBlocked())) {
+            throw new RuntimeException("This account has been blocked");
+        }
 
         String token = jwtService.generateToken(user);
         String role = RoleUtils.resolvePrimaryRole(user.getRoles());

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Random;
 
 @Service
@@ -44,6 +45,8 @@ public class OtpServiceImpl implements OtpService {
             throw new RuntimeException("Too many OTP requests. Try again later.");
         }
 
+        invalidateActiveOtps(email);
+
         // Generate new OTP
         String plainOtp = generateRandomOtp();
         Otp otp = new Otp();
@@ -64,8 +67,16 @@ public class OtpServiceImpl implements OtpService {
     @Override
     public boolean verifyOtp(String email, String plainOtp) {
         LocalDateTime now = LocalDateTime.now();
-        Otp otp = otpRepository.findByEmailAndVerifiedFalseAndExpiryTimeAfter(email, now)
-                .orElseThrow(() -> new RuntimeException("No valid OTP found for this email"));
+        List<Otp> activeOtps = otpRepository.findByEmailAndVerifiedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(email, now);
+        if (activeOtps.isEmpty()) {
+            throw new RuntimeException("No valid OTP found for this email");
+        }
+
+        Otp otp = activeOtps.get(0);
+        if (activeOtps.size() > 1) {
+            activeOtps.stream().skip(1).forEach(staleOtp -> staleOtp.setVerified(true));
+            otpRepository.saveAll(activeOtps.subList(1, activeOtps.size()));
+        }
 
         if (otp.getAttempts() >= maxAttempts) {
             throw new RuntimeException("Max OTP attempts exceeded");
@@ -111,5 +122,12 @@ public class OtpServiceImpl implements OtpService {
         Random random = new Random();
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
+    }
+
+    private void invalidateActiveOtps(String email) {
+        List<Otp> activeOtps = otpRepository
+                .findByEmailAndVerifiedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(email, LocalDateTime.now());
+        activeOtps.forEach(otp -> otp.setVerified(true));
+        otpRepository.saveAll(activeOtps);
     }
 }

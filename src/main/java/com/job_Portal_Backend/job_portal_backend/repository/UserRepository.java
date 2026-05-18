@@ -21,8 +21,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.isDeleted = false")
     List<User> findAllNotDeleted();
 
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = :roleName ORDER BY u.createdAt DESC")
+    List<User> findByRoleName(@Param("roleName") String roleName);
+
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.isDeleted = false ORDER BY u.createdAt DESC")
+    List<User> findByRoleNameAndNotDeleted(@Param("roleName") String roleName);
+
     @Query("SELECT COUNT(u) FROM User u WHERE u.isDeleted = false")
     long countNotDeleted();
+
+    @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.isDeleted = false")
+    long countByRoleNameAndNotDeleted(@Param("roleName") String roleName);
+
+    @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.isDeleted = false AND u.isBlocked = true")
+    long countByRoleNameAndBlocked(@Param("roleName") String roleName);
 
     @Query("SELECT u FROM User u WHERE u.id = :id AND u.isDeleted = false")
     Optional<User> findByIdAndNotDeleted(@Param("id") Long id);

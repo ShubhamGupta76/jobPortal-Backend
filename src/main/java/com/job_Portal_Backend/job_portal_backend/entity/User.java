@@ -57,6 +57,9 @@ public class User implements UserDetails {
     private Boolean isDeleted = false;
 
     @Column(nullable = false)
+    private Boolean isBlocked = false;
+
+    @Column(nullable = false)
     private Boolean isEmailVerified = false;
 
     public Boolean getIsEmailVerified() {
@@ -191,6 +194,14 @@ public class User implements UserDetails {
         this.isDeleted = isDeleted;
     }
 
+    public Boolean getIsBlocked() {
+        return isBlocked;
+    }
+
+    public void setIsBlocked(Boolean isBlocked) {
+        this.isBlocked = isBlocked;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return roles.stream()
@@ -220,6 +231,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return !Boolean.TRUE.equals(isDeleted) && !Boolean.TRUE.equals(isBlocked);
     }
 }
