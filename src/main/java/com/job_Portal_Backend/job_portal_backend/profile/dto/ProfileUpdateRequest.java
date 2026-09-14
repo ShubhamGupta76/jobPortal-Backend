@@ -11,5 +11,10 @@ public class ProfileUpdateRequest {
     private String headline;
     private String bio;
     private String location;
+    private String skills;
+    private String experienceLevel;
+    private String preferredJobType;
+    private String preferredWorkplaceType;
+    private Double salaryExpectation;
     private MultipartFile resume;
 }

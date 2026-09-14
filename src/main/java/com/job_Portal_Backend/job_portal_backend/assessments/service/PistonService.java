@@ -61,11 +61,10 @@ public class PistonService {
             return "python";
         }
         return switch (language.trim().toUpperCase()) {
-            case "CPP", "C++" -> "c++";
+            case "CPP", "C++", "C" -> "gcc";
             case "JAVASCRIPT", "JS", "NODE" -> "javascript";
             case "PYTHON", "PY" -> "python";
             case "JAVA" -> "java";
-            case "C" -> "c";
             default -> language.toLowerCase();
         };
     }

@@ -86,6 +86,26 @@ public class FileUploadServiceImpl implements FileUploadService {
     }
 
     @Override
+    public FileUploadDto getFileByIdForAdmin(Long fileId) {
+        return fileUploadRepository.findById(fileId)
+                .filter(file -> !Boolean.TRUE.equals(file.getIsDeleted()))
+                .map(this::convertToDto)
+                .orElse(null);
+    }
+
+    @Override
+    public byte[] downloadFileForAdmin(Long fileId) throws IOException {
+        FileUpload fileUpload = fileUploadRepository.findById(fileId)
+                .filter(file -> !Boolean.TRUE.equals(file.getIsDeleted()))
+                .orElseThrow(() -> new IOException("File record not found in database"));
+        Path filePath = Paths.get(fileUpload.getFilePath());
+        if (!Files.exists(filePath)) {
+            throw new IOException("File not found on disk");
+        }
+        return Files.readAllBytes(filePath);
+    }
+
+    @Override
     public List<FileUploadDto> getFilesByEntity(String entityType, Long entityId, User user) {
         List<FileUpload> files = fileUploadRepository.findByEntityTypeAndEntityIdAndUserAndIsDeletedFalse(entityType,
                 entityId, user);

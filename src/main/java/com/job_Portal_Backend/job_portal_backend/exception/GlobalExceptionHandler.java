@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.DataAccessException;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +67,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode())
                 .body(new ApiResponse<>(false, message, null));
     }
+
+        @ExceptionHandler(DataAccessException.class)
+        public ResponseEntity<ApiResponse<Void>> handleDataAccessException(DataAccessException ex) {
+                log.error("Data access failure", ex);
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(new ApiResponse<>(false, "A required backend service is unavailable. Please try again later.", null));
+        }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {

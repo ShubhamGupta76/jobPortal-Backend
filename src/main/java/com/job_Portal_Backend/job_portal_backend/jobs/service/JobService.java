@@ -1,5 +1,6 @@
 package com.job_Portal_Backend.job_portal_backend.jobs.service;
 
+import com.job_Portal_Backend.job_portal_backend.billing.service.SubscriptionEntitlementService;
 import com.job_Portal_Backend.job_portal_backend.entity.Company;
 import com.job_Portal_Backend.job_portal_backend.entity.Job;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
@@ -14,9 +15,14 @@ import com.job_Portal_Backend.job_portal_backend.mapper.JobMapper;
 import com.job_Portal_Backend.job_portal_backend.repository.ApplicationRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.CompanyRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.JobRepository;
+import com.job_Portal_Backend.job_portal_backend.savedsearch.service.SavedSearchService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,25 +30,42 @@ import java.util.stream.Collectors;
 @Service
 public class JobService {
 
+    private static final Logger log = LoggerFactory.getLogger(JobService.class);
+
     private final JobRepository jobRepository;
     private final CompanyRepository companyRepository;
     private final ApplicationRepository applicationRepository;
     private final JobMapper jobMapper;
+    private final SavedSearchService savedSearchService;
+    private final SubscriptionEntitlementService entitlementService;
 
     public JobService(
             JobRepository jobRepository,
             CompanyRepository companyRepository,
             ApplicationRepository applicationRepository,
-            JobMapper jobMapper) {
+            JobMapper jobMapper,
+            SavedSearchService savedSearchService,
+            SubscriptionEntitlementService entitlementService) {
         this.jobRepository = jobRepository;
         this.companyRepository = companyRepository;
         this.applicationRepository = applicationRepository;
         this.jobMapper = jobMapper;
+        this.savedSearchService = savedSearchService;
+        this.entitlementService = entitlementService;
     }
 
     public JobDto createJob(JobCreateRequest request, User recruiter) {
         Company company = companyRepository.findById(request.getCompanyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
+
+        // Entitlement is determined entirely server-side from the company's actual subscription
+        // (never a client-supplied plan). The seeded FREE plan has no job limit, so this is a
+        // no-op for every company that isn't on a plan with an explicit, real limit.
+        if (!entitlementService.canPostJob(company.getId())) {
+            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
+                    "Your plan's active job posting limit (" + entitlementService.maxActiveJobs(company.getId())
+                            + ") has been reached. Upgrade your plan to post more jobs.");
+        }
 
         Job job = new Job();
         job.setTitle(request.getTitle());
@@ -61,6 +84,11 @@ public class JobService {
         job.setRecruiter(recruiter);
 
         job = jobRepository.save(job);
+        try {
+            savedSearchService.processNewJob(job);
+        } catch (RuntimeException alertFailure) {
+            log.warn("Saved-search alert delivery failed for job {}", job.getId(), alertFailure);
+        }
         return jobMapper.toDto(job);
     }
 
@@ -115,6 +143,10 @@ public class JobService {
     }
 
     public List<JobDto> getJobs(JobFilterRequest filter) {
+        return getJobs(filter, null);
+    }
+
+    public List<JobDto> getJobs(JobFilterRequest filter, User candidate) {
         final Sort sort = "desc".equalsIgnoreCase(filter.getSortDir())
                 ? Sort.by(filter.getSortBy()).descending()
                 : Sort.by(filter.getSortBy()).ascending();
@@ -128,7 +160,6 @@ public class JobService {
                 filter.getJobType(),
                 filter.getExperienceLevel(),
                 filter.getKeyword());
-        System.out.println("Jobs fetched: " + jobs.size());
 
         return jobs.stream()
                 .sorted((first, second) -> {
@@ -150,14 +181,18 @@ public class JobService {
                 })
                 .skip((long) filter.getPage() * filter.getSize())
                 .limit(filter.getSize())
-                .map(jobMapper::toDto)
+                .map(job -> candidate == null ? jobMapper.toDto(job) : jobMapper.toDto(job, candidate))
                 .collect(Collectors.toList());
     }
 
     public JobDto getJobById(Long jobId) {
+            return getJobById(jobId, null);
+            }
+
+            public JobDto getJobById(Long jobId, User candidate) {
         Job job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
-        return jobMapper.toDto(job);
+            return candidate == null ? jobMapper.toDto(job) : jobMapper.toDto(job, candidate);
     }
 
     public List<JobDto> getJobsByRecruiter(User recruiter) {

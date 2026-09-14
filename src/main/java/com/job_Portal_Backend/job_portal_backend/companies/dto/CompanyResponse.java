@@ -17,4 +17,5 @@ public class CompanyResponse {
     private String ownerName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String verificationStatus;
 }

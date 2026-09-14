@@ -2,6 +2,7 @@ package com.job_Portal_Backend.job_portal_backend.applications.dto;
 
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class ApplicationDto {
@@ -29,4 +30,13 @@ public class ApplicationDto {
     private String assessmentAnalysis;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<ApplicationTimelineEventDto> timeline;
+    private Integer matchScore;
+    private List<String> matchingSkills;
+    private List<String> missingSkills;
+    private Integer skillsScore;
+    private Integer experienceScore;
+    private Integer locationScore;
+    private Integer preferenceScore;
+    private Integer profileScore;
 }

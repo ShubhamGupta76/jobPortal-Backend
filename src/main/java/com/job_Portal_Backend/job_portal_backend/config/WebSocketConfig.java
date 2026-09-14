@@ -10,6 +10,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
+
+    public WebSocketConfig(WebSocketAuthInterceptor webSocketAuthInterceptor) {
+        this.webSocketAuthInterceptor = webSocketAuthInterceptor;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // Enable a simple in-memory message broker
@@ -32,5 +38,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // Alternative endpoint without SockJS for native WebSocket clients
         registry.addEndpoint("/ws-native")
                 .setAllowedOriginPatterns("*");
+    }
+
+    @Override
+    public void configureClientInboundChannel(org.springframework.messaging.simp.config.ChannelRegistration registration) {
+        registration.interceptors(webSocketAuthInterceptor);
     }
 }

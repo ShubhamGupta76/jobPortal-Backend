@@ -9,7 +9,10 @@ import lombok.ToString;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "applications")
+@Table(name = "applications", indexes = {
+        @Index(name = "idx_applications_user_id", columnList = "user_id"),
+        @Index(name = "idx_applications_job_id", columnList = "job_id")
+})
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)

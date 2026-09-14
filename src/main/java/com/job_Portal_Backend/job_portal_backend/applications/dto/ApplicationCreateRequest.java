@@ -16,4 +16,6 @@ public class ApplicationCreateRequest {
     private String source;
 
     private MultipartFile resume;
+
+    private Long resumeDocumentId;
 }

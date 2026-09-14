@@ -4,6 +4,7 @@ import com.job_Portal_Backend.job_portal_backend.config.JwtService;
 import com.job_Portal_Backend.job_portal_backend.dashboard.dto.CandidateDashboardResponse;
 import com.job_Portal_Backend.job_portal_backend.dashboard.dto.PublicMetricsResponse;
 import com.job_Portal_Backend.job_portal_backend.dashboard.dto.RecruiterDashboardResponse;
+import com.job_Portal_Backend.job_portal_backend.dashboard.dto.RecruiterAnalyticsResponse;
 import com.job_Portal_Backend.job_portal_backend.dashboard.service.DashboardService;
 import com.job_Portal_Backend.job_portal_backend.dto.ApiResponse;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
-@CrossOrigin(origins = "*")
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -38,6 +38,16 @@ public class DashboardController {
     @PreAuthorize("hasRole('RECRUITER')")
     public ResponseEntity<ApiResponse<RecruiterDashboardResponse>> getRecruiterDashboard(@RequestHeader("Authorization") String token) {
         return ResponseEntity.ok(new ApiResponse<>(true, "Recruiter dashboard retrieved successfully", dashboardService.getRecruiterDashboard(resolveUser(token))));
+    }
+
+    @GetMapping("/recruiter/analytics")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<ApiResponse<RecruiterAnalyticsResponse>> getRecruiterAnalytics(
+            @RequestParam(defaultValue = "30") int days,
+            @RequestHeader("Authorization") String token) {
+        int period = Math.max(1, Math.min(days, 365));
+        return ResponseEntity.ok(new ApiResponse<>(true, "Recruiter analytics retrieved successfully",
+                dashboardService.getRecruiterAnalytics(resolveUser(token), period)));
     }
 
     @GetMapping("/public")

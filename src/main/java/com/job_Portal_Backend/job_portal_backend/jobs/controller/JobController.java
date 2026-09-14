@@ -16,12 +16,12 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/jobs")
-@CrossOrigin(origins = "*")
 public class JobController {
 
     @Autowired
@@ -34,14 +34,18 @@ public class JobController {
     private UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<JobDto>>> getJobs(JobFilterRequest filter) {
-        List<JobDto> jobs = jobService.getJobs(filter);
+    public ResponseEntity<ApiResponse<List<JobDto>>> getJobs(JobFilterRequest filter,
+            @AuthenticationPrincipal User candidate) {
+        User matchingCandidate = isCandidate(candidate) ? candidate : null;
+        List<JobDto> jobs = jobService.getJobs(filter, matchingCandidate);
         return ResponseEntity.ok(new ApiResponse<>(true, "Jobs retrieved successfully", jobs));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<JobDto>> getJobById(@PathVariable Long id) {
-        JobDto job = jobService.getJobById(id);
+    public ResponseEntity<ApiResponse<JobDto>> getJobById(@PathVariable Long id,
+            @AuthenticationPrincipal User candidate) {
+        User matchingCandidate = isCandidate(candidate) ? candidate : null;
+        JobDto job = jobService.getJobById(id, matchingCandidate);
         return ResponseEntity.ok(new ApiResponse<>(true, "Job retrieved successfully", job));
     }
 
@@ -114,5 +118,11 @@ public class JobController {
 
         int archivedCount = jobService.archiveOldJobs(recruiter, days);
         return ResponseEntity.ok(new ApiResponse<>(true, "Old jobs archived successfully", archivedCount));
+    }
+
+    private boolean isCandidate(User user) {
+        return user != null && user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> "USER".equalsIgnoreCase(role.getName())
+                        || "CANDIDATE".equalsIgnoreCase(role.getName()));
     }
 }

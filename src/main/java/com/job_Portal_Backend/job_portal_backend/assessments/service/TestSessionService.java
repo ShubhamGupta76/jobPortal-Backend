@@ -31,8 +31,6 @@ public class TestSessionService {
      */
     public TestSession startTestSession(Long assessmentId, Long candidateId, String userAgent, String ipAddress,
             String deviceFingerprint) {
-        System.out.println("Service - Assessment ID: " + assessmentId + ", Candidate ID: " + candidateId);
-
         Assessment assessment = assessmentRepository.findById(assessmentId)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
 
@@ -72,7 +70,6 @@ public class TestSessionService {
             session.setUserAgent(userAgent);
             session.setIpAddress(ipAddress);
             session.setUpdatedAt(now);
-            System.out.println("Resuming existing session: " + session.getId());
             return testSessionRepository.save(session);
         }
 

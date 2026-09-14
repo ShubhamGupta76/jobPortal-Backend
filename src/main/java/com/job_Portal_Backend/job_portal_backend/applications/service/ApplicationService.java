@@ -8,15 +8,21 @@ import com.job_Portal_Backend.job_portal_backend.assessments.repository.ResultRe
 import com.job_Portal_Backend.job_portal_backend.assessments.repository.TestSessionRepository;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationCreateRequest;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationDto;
+import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationTimelineEventDto;
 import com.job_Portal_Backend.job_portal_backend.entity.Application;
 import com.job_Portal_Backend.job_portal_backend.entity.Application.ApplicationStatus;
+import com.job_Portal_Backend.job_portal_backend.entity.ApplicationStatusHistory;
 import com.job_Portal_Backend.job_portal_backend.entity.Job;
+import com.job_Portal_Backend.job_portal_backend.entity.ResumeDocument;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.exception.ResourceNotFoundException;
 import com.job_Portal_Backend.job_portal_backend.mapper.ApplicationMapper;
 import com.job_Portal_Backend.job_portal_backend.service.NotificationService;
 import com.job_Portal_Backend.job_portal_backend.repository.ApplicationRepository;
+import com.job_Portal_Backend.job_portal_backend.repository.ApplicationStatusHistoryRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.JobRepository;
+import com.job_Portal_Backend.job_portal_backend.repository.ResumeDocumentRepository;
+import com.job_Portal_Backend.job_portal_backend.jobs.service.JobMatchingService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,7 +31,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -40,6 +48,9 @@ public class ApplicationService {
     private final ResultRepository resultRepository;
     private final ApplicationMapper applicationMapper;
     private final NotificationService notificationService;
+    private final ApplicationStatusHistoryRepository statusHistoryRepository;
+    private final JobMatchingService jobMatchingService;
+    private final ResumeDocumentRepository resumeDocumentRepository;
 
     private final String uploadDir = "uploads/resumes/";
 
@@ -50,7 +61,10 @@ public class ApplicationService {
             TestSessionRepository testSessionRepository,
             ResultRepository resultRepository,
             ApplicationMapper applicationMapper,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            ApplicationStatusHistoryRepository statusHistoryRepository,
+            JobMatchingService jobMatchingService,
+            ResumeDocumentRepository resumeDocumentRepository) {
         this.applicationRepository = applicationRepository;
         this.jobRepository = jobRepository;
         this.assessmentRepository = assessmentRepository;
@@ -58,6 +72,9 @@ public class ApplicationService {
         this.resultRepository = resultRepository;
         this.applicationMapper = applicationMapper;
         this.notificationService = notificationService;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.jobMatchingService = jobMatchingService;
+        this.resumeDocumentRepository = resumeDocumentRepository;
     }
 
     public ApplicationDto applyToJob(ApplicationCreateRequest request, User user) throws IOException {
@@ -77,7 +94,14 @@ public class ApplicationService {
         application.setCoverLetter(request.getCoverLetter());
         application.setSource(normalizeSource(request.getSource()));
 
-        if (request.getResume() != null && !request.getResume().isEmpty()) {
+        if (request.getResumeDocumentId() != null) {
+            ResumeDocument resume = resumeDocumentRepository
+                    .findByIdAndUserId(request.getResumeDocumentId(), user.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Selected resume not found"));
+            // Snapshot the resume's current file path onto the application. Renaming, replacing,
+            // or deleting the resume later in the candidate's library must not change this value.
+            application.setResumePath(resume.getFileUpload().getFilePath());
+        } else if (request.getResume() != null && !request.getResume().isEmpty()) {
             String fileName = UUID.randomUUID().toString() + "_" + request.getResume().getOriginalFilename();
             Path filePath = Paths.get(uploadDir + fileName);
             Files.createDirectories(filePath.getParent());
@@ -86,6 +110,7 @@ public class ApplicationService {
         }
 
         application = applicationRepository.save(application);
+        recordStatusChange(application, null, Application.ApplicationStatus.APPLIED, user, "Application submitted");
         notificationService.sendNotificationToUser(
                 job.getRecruiter().getId(),
                 "APPLICATION",
@@ -115,7 +140,7 @@ public class ApplicationService {
         ApplicationStatus previousStatus = application.getStatus();
         application.setStatus(nextStatus);
         application = applicationRepository.save(application);
-        System.out.println("Application transition: " + applicationId + " " + previousStatus + " -> " + nextStatus);
+        recordStatusChange(application, previousStatus, nextStatus, recruiter, "Status updated by recruiter");
         notificationService.createNotification(
                 application.getUser(),
                 "Application status updated",
@@ -145,10 +170,13 @@ public class ApplicationService {
         Assessment assessment = resolveAssessment(jobId, assessmentId, recruiter.getId());
 
         application.setAssignedAssessment(assessment);
+        ApplicationStatus previousStatus = application.getStatus();
         application.setStatus(ApplicationStatus.ASSESSMENT);
         application = applicationRepository.save(application);
+        if (previousStatus != ApplicationStatus.ASSESSMENT) {
+            recordStatusChange(application, previousStatus, ApplicationStatus.ASSESSMENT, recruiter, "Assessment assigned");
+        }
 
-        System.out.println("Assessment assigned: application=" + application.getId() + ", assessment=" + assessment.getId());
         notificationService.createNotification(
                 application.getUser(),
                 "Assessment assigned",
@@ -162,6 +190,19 @@ public class ApplicationService {
     public List<ApplicationDto> getApplicationsByUser(User user) {
         List<Application> applications = applicationRepository.findByUserIdAndNotDeleted(user.getId());
         return applications.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public List<ApplicationTimelineEventDto> getApplicationTimeline(Long applicationId, User viewer) {
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+        boolean candidateOwner = application.getUser().getId().equals(viewer.getId());
+        boolean recruiterOwner = application.getJob().getRecruiter().getId().equals(viewer.getId());
+        if (!candidateOwner && !recruiterOwner) {
+            throw new RuntimeException("Unauthorized to view this application timeline");
+        }
+        return statusHistoryRepository.findByApplicationIdOrderByCreatedAtAsc(applicationId).stream()
+                .map(this::toTimelineEvent)
+                .toList();
     }
 
     public Page<ApplicationDto> getApplicationsByRecruiter(User recruiter, int page, int size) {
@@ -179,14 +220,48 @@ public class ApplicationService {
         }
 
         List<Application> applications = applicationRepository.findByJobIdAndNotDeleted(jobId);
+
+        // Batch-fetch every application's timeline in one query instead of one query per
+        // application (this list can be large for a popular job).
+        List<Long> applicationIds = applications.stream().map(Application::getId).toList();
+        Map<Long, List<ApplicationStatusHistory>> timelinesByApplicationId = applicationIds.isEmpty()
+                ? Collections.emptyMap()
+                : statusHistoryRepository.findByApplicationIdInOrderByCreatedAtAsc(applicationIds).stream()
+                        .collect(Collectors.groupingBy(history -> history.getApplication().getId()));
+
         return applications.stream()
                 .sorted((first, second) -> second.getCreatedAt().compareTo(first.getCreatedAt()))
-                .map(this::toDto)
+                .map(application -> toDto(application, timelinesByApplicationId))
                 .collect(Collectors.toList());
     }
 
     private ApplicationDto toDto(Application application) {
+        return toDto(application, null);
+    }
+
+    /**
+     * @param timelinesByApplicationId when supplied (list endpoints), avoids one
+     *                                 findByApplicationIdOrderByCreatedAtAsc query per
+     *                                 application; when null (single-application call sites),
+     *                                 falls back to the per-application query, unchanged.
+     */
+    private ApplicationDto toDto(Application application, Map<Long, List<ApplicationStatusHistory>> timelinesByApplicationId) {
         ApplicationDto dto = applicationMapper.toDto(application);
+        JobMatchingService.MatchResult match = jobMatchingService.score(application.getJob(), application.getUser());
+        dto.setMatchScore(match.score());
+        dto.setMatchingSkills(match.matchingSkills());
+        dto.setMissingSkills(match.missingSkills());
+        dto.setSkillsScore(match.skillsScore());
+        dto.setExperienceScore(match.experienceScore());
+        dto.setLocationScore(match.locationScore());
+        dto.setPreferenceScore(match.preferenceScore());
+        dto.setProfileScore(match.profileScore());
+        List<ApplicationStatusHistory> timeline = timelinesByApplicationId != null
+                ? timelinesByApplicationId.getOrDefault(application.getId(), Collections.emptyList())
+                : statusHistoryRepository.findByApplicationIdOrderByCreatedAtAsc(application.getId());
+        dto.setTimeline(timeline.stream()
+            .map(this::toTimelineEvent)
+            .toList());
 
         if (application.getAssignedAssessment() == null) {
             return dto;
@@ -211,6 +286,28 @@ public class ApplicationService {
                 });
 
         return dto;
+    }
+
+    private void recordStatusChange(Application application, ApplicationStatus previousStatus,
+                                    ApplicationStatus nextStatus, User actor, String note) {
+        ApplicationStatusHistory history = new ApplicationStatusHistory();
+        history.setApplication(application);
+        history.setPreviousStatus(previousStatus);
+        history.setStatus(nextStatus);
+        history.setActor(actor);
+        history.setNote(note);
+        statusHistoryRepository.save(history);
+    }
+
+    private ApplicationTimelineEventDto toTimelineEvent(ApplicationStatusHistory history) {
+        ApplicationTimelineEventDto event = new ApplicationTimelineEventDto();
+        event.setId(history.getId());
+        event.setPreviousStatus(history.getPreviousStatus() == null ? null : history.getPreviousStatus().name());
+        event.setStatus(history.getStatus().name());
+        event.setActorName((history.getActor().getFirstName() + " " + history.getActor().getLastName()).trim());
+        event.setTimestamp(history.getCreatedAt());
+        event.setNote(history.getNote());
+        return event;
     }
 
     private ApplicationStatus parseStatus(String status) {

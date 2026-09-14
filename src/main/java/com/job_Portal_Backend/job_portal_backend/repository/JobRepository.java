@@ -14,14 +14,14 @@ public interface JobRepository extends JpaRepository<Job, Long> {
         @Query("SELECT j FROM Job j WHERE " +
                         "(j.status = 'ACTIVE' OR j.status IS NULL) AND " +
                         "j.isDeleted = false AND " +
-                        "(:location IS NULL OR LOWER(j.location) LIKE LOWER(CONCAT('%', :location, '%'))) AND " +
+                        "(COALESCE(:location, '') = '' OR LOWER(j.location) LIKE LOWER(CONCAT('%', COALESCE(:location, ''), '%'))) AND " +
                         "(:minSalary IS NULL OR j.minSalary >= :minSalary) AND " +
                         "(:maxSalary IS NULL OR j.maxSalary <= :maxSalary) AND " +
                         "(:jobType IS NULL OR j.jobType = :jobType) AND " +
                         "(:experienceLevel IS NULL OR j.experienceLevel = :experienceLevel) AND " +
-                        "(:keyword IS NULL OR LOWER(j.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-                        " LOWER(j.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-                        " LOWER(j.skills) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                        "(COALESCE(:keyword, '') = '' OR LOWER(j.title) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%')) OR " +
+                        " LOWER(j.description) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%')) OR " +
+                        " LOWER(j.skills) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%')))" )
         List<Job> findJobsWithFilters(@Param("location") String location,
                         @Param("minSalary") Double minSalary,
                         @Param("maxSalary") Double maxSalary,
@@ -34,6 +34,9 @@ public interface JobRepository extends JpaRepository<Job, Long> {
 
         @Query("SELECT COUNT(j) FROM Job j WHERE j.recruiter.id = :recruiterId AND j.isDeleted = false")
         long countByRecruiterIdAndNotDeleted(@Param("recruiterId") Long recruiterId);
+
+        @Query("SELECT COUNT(j) FROM Job j WHERE j.company.id = :companyId AND (j.status = 'ACTIVE' OR j.status IS NULL) AND j.isDeleted = false")
+        long countActiveByCompanyId(@Param("companyId") Long companyId);
 
         @Query("SELECT DISTINCT j.title FROM Job j WHERE (j.status = 'ACTIVE' OR j.status IS NULL) AND j.isDeleted = false AND LOWER(j.title) LIKE LOWER(CONCAT('%', :keyword, '%')) ORDER BY j.title ASC")
         List<String> findMatchingTitles(@Param("keyword") String keyword, Pageable pageable);

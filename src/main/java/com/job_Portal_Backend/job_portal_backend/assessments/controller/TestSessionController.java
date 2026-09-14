@@ -42,8 +42,6 @@ public class TestSessionController {
         Long assessmentId = Long.valueOf(String.valueOf(req.get("assessmentId")));
         String deviceFingerprint = req.get("deviceFingerprint") != null ? String.valueOf(req.get("deviceFingerprint")) : "";
         User user = (User) auth.getPrincipal();
-        System.out.println("Assessment ID: " + assessmentId);
-        System.out.println("User ID: " + user.getId());
 
         String userAgent = request.getHeader("User-Agent") != null ? request.getHeader("User-Agent") : "";
         String ipAddress = getClientIp(request);

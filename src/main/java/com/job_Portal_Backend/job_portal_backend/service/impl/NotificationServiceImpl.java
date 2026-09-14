@@ -2,12 +2,18 @@ package com.job_Portal_Backend.job_portal_backend.service.impl;
 
 import com.job_Portal_Backend.job_portal_backend.dto.NotificationDto;
 import com.job_Portal_Backend.job_portal_backend.entity.Notification;
+import com.job_Portal_Backend.job_portal_backend.entity.NotificationPreference.Category;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.exception.ResourceNotFoundException;
+import com.job_Portal_Backend.job_portal_backend.notificationpreferences.service.NotificationPreferenceResolver;
+import com.job_Portal_Backend.job_portal_backend.notificationpreferences.service.NotificationTypeCategoryMapper;
 import com.job_Portal_Backend.job_portal_backend.repository.NotificationRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.UserRepository;
+import com.job_Portal_Backend.job_portal_backend.service.EmailService;
 import com.job_Portal_Backend.job_portal_backend.service.NotificationService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -19,6 +25,8 @@ import java.util.stream.Collectors;
 @Service
 public class NotificationServiceImpl implements NotificationService {
 
+    private static final Logger log = LoggerFactory.getLogger(NotificationServiceImpl.class);
+
     @Autowired
     private NotificationRepository notificationRepository;
 
@@ -28,31 +36,63 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private NotificationPreferenceResolver notificationPreferenceResolver;
+
+    @Autowired
+    private EmailService emailService;
+
     @Override
     public void sendNotificationToUser(Long userId, String type, String title, String message, String data) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        sendNotificationToUser(user, title, message, type);
+        sendNotificationToUser(user, title, message, type, data);
     }
 
     @Override
     public void sendNotificationToUser(User user, String title, String message, String type) {
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setTitle(title);
-        notification.setMessage(message);
-        notification.setType(type);
-        notification.setRead(false);
-        notification.setCreatedAt(LocalDateTime.now());
+        sendNotificationToUser(user, title, message, type, null);
+    }
 
-        Notification savedNotification = notificationRepository.save(notification);
+    @Override
+    public void sendNotificationToUser(User user, String title, String message, String type, String data) {
+        Category category = NotificationTypeCategoryMapper.resolve(type);
+        NotificationPreferenceResolver.Effective preference = notificationPreferenceResolver.resolve(user.getId(), category);
 
-        // Send real-time notification via WebSocket
-        NotificationDto dto = convertToDto(savedNotification);
-        messagingTemplate.convertAndSendToUser(
-                user.getEmail(),
-                "/queue/notifications",
-                dto);
+        // IN_APP disabled: skip persistence and the WebSocket push entirely for this category.
+        // IN_APP enabled (the default for every category): behavior is byte-for-byte unchanged
+        // from before notification preferences existed.
+        if (preference.inAppEnabled()) {
+            Notification notification = new Notification();
+            notification.setUser(user);
+            notification.setTitle(title);
+            notification.setMessage(message);
+            notification.setType(type);
+            notification.setData(data);
+            notification.setRead(false);
+            notification.setCreatedAt(LocalDateTime.now());
+
+            Notification savedNotification = notificationRepository.save(notification);
+
+            // Send real-time notification via WebSocket
+            NotificationDto dto = convertToDto(savedNotification);
+            messagingTemplate.convertAndSendToUser(
+                    user.getEmail(),
+                    "/queue/notifications",
+                    dto);
+        }
+
+        // EMAIL defaults to OFF for every category (no category currently sends email), so this
+        // only ever fires when the user has explicitly opted in from the preferences screen.
+        // Reuses the existing EmailService.sendBulkEmail — no second SMTP mechanism.
+        if (preference.emailEnabled()) {
+            try {
+                emailService.sendBulkEmail(new String[] { user.getEmail() }, title, message);
+            } catch (RuntimeException emailFailure) {
+                log.warn("Notification email delivery failed for user {} category {}: {}",
+                        user.getId(), category, emailFailure.getMessage());
+            }
+        }
     }
 
     @Override
@@ -232,6 +272,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .title(notification.getTitle())
                 .message(notification.getMessage())
                 .type(notification.getType())
+                .data(notification.getData())
                 .read(notification.isRead())
                 .createdAt(notification.getCreatedAt())
                 .readAt(notification.getReadAt())
@@ -240,7 +281,6 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void sendNotificationToUsers(List<User> users, String title, String message, String type) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'sendNotificationToUsers'");
+        users.forEach(user -> sendNotificationToUser(user, title, message, type));
     }
 }

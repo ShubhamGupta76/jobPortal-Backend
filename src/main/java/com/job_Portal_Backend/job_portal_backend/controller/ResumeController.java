@@ -4,6 +4,7 @@ import com.job_Portal_Backend.job_portal_backend.config.JwtService;
 import com.job_Portal_Backend.job_portal_backend.entity.Application;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.exception.ResourceNotFoundException;
+import com.job_Portal_Backend.job_portal_backend.profileanalytics.service.ProfileViewService;
 import com.job_Portal_Backend.job_portal_backend.repository.ApplicationRepository;
 import com.job_Portal_Backend.job_portal_backend.repository.UserRepository;
 import org.springframework.core.io.ByteArrayResource;
@@ -27,11 +28,14 @@ public class ResumeController {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final ApplicationRepository applicationRepository;
+    private final ProfileViewService profileViewService;
 
-    public ResumeController(JwtService jwtService, UserRepository userRepository, ApplicationRepository applicationRepository) {
+    public ResumeController(JwtService jwtService, UserRepository userRepository,
+            ApplicationRepository applicationRepository, ProfileViewService profileViewService) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.applicationRepository = applicationRepository;
+        this.profileViewService = profileViewService;
     }
 
     @GetMapping("/{userId}")
@@ -43,6 +47,8 @@ public class ResumeController {
         User requester = resolveUser(token);
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        profileViewService.recordViewIfAuthorized(targetUser, requester, "RESUME");
 
         String resumePath = resolveResumePath(requester, targetUser);
         if (resumePath == null || resumePath.isBlank()) {

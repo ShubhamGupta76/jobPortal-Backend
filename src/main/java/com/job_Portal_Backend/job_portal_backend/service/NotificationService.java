@@ -14,6 +14,8 @@ public interface NotificationService {
 
     void sendNotificationToUser(User user, String title, String message, String type);
 
+    void sendNotificationToUser(User user, String title, String message, String type, String data);
+
     void sendNotificationToUsers(List<User> users, String title, String message, String type);
 
     void sendBulkNotification(String title, String message, String type);

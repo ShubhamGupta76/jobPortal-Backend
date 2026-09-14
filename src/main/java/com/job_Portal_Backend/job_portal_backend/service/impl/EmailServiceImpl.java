@@ -3,13 +3,16 @@ package com.job_Portal_Backend.job_portal_backend.service.impl;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.service.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import jakarta.mail.internet.MimeMessage;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
@@ -459,7 +462,11 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    @Async
     public void sendOtpEmail(String email, String otp) {
+        // Runs off the request thread: a slow/unreachable SMTP server (timeouts, DNS failures)
+        // must never add seconds of latency to the register/login/resend-otp HTTP response, since
+        // the OTP row is already persisted before this is called and nothing awaits its result.
         String subject = "Your JobPortal Verification Code";
         String greeting = "Dear User,";
         String body = String.format("""
@@ -473,7 +480,8 @@ public class EmailServiceImpl implements EmailService {
                 """, appName, otp);
 
         String htmlContent = buildHtmlWrapper(subject, greeting, body);
-        System.out.println("=== SENDING OTP [" + otp + "] to [" + email + "] ===");
+        // Never log the OTP value itself, only that a send was attempted.
+        log.info("Sending OTP email to [{}]", email);
         sendEmail(email, subject, htmlContent);
     }
 
@@ -506,7 +514,7 @@ public class EmailServiceImpl implements EmailService {
             mailSender.send(message);
         } catch (Exception e) {
             // Log the error but don't throw exception to avoid breaking the flow
-            System.err.println("Failed to send email to " + to + ": " + e.getMessage());
+            log.warn("Failed to send email to [{}]: {}", to, e.getMessage());
         }
     }
 }

@@ -31,6 +31,9 @@ public class Notification {
 
     private String type;
 
+    @Column(length = 2000)
+    private String data;
+
     @Column(name = "is_read", nullable = false)
     private Boolean read = false;
 

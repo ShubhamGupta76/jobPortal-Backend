@@ -16,7 +16,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/bookmarks")
-@CrossOrigin(origins = "*")
 public class BookmarkController {
 
     private final BookmarkService bookmarkService;

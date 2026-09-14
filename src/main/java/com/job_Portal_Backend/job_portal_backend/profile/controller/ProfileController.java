@@ -7,6 +7,7 @@ import com.job_Portal_Backend.job_portal_backend.exception.ResourceNotFoundExcep
 import com.job_Portal_Backend.job_portal_backend.profile.dto.ProfileResponse;
 import com.job_Portal_Backend.job_portal_backend.profile.dto.ProfileUpdateRequest;
 import com.job_Portal_Backend.job_portal_backend.profile.service.ProfileService;
+import com.job_Portal_Backend.job_portal_backend.profileanalytics.service.ProfileViewService;
 import com.job_Portal_Backend.job_portal_backend.repository.UserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,17 +17,19 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/v1/profile")
-@CrossOrigin(origins = "*")
 public class ProfileController {
 
     private final ProfileService profileService;
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final ProfileViewService profileViewService;
 
-    public ProfileController(ProfileService profileService, JwtService jwtService, UserRepository userRepository) {
+    public ProfileController(ProfileService profileService, JwtService jwtService, UserRepository userRepository,
+            ProfileViewService profileViewService) {
         this.profileService = profileService;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.profileViewService = profileViewService;
     }
 
     @GetMapping
@@ -44,6 +47,18 @@ public class ProfileController {
     ) throws IOException {
         User user = resolveUser(token);
         return ResponseEntity.ok(new ApiResponse<>(true, "Profile updated successfully", profileService.updateProfile(user, request)));
+    }
+
+    @PostMapping("/{userId}/view")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<ApiResponse<Void>> recordProfileView(
+            @PathVariable Long userId,
+            @RequestHeader("Authorization") String token) {
+        User viewer = resolveUser(token);
+        User viewedUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        profileViewService.recordViewIfAuthorized(viewedUser, viewer, "APPLICATION");
+        return ResponseEntity.ok(new ApiResponse<>(true, "View recorded", null));
     }
 
     private User resolveUser(String token) {

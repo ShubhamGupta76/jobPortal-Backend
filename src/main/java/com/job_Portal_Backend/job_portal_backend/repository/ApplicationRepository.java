@@ -25,6 +25,9 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
         Page<Application> findByJobRecruiterId(Long recruiterId, Pageable pageable);
 
+        @Query("SELECT COUNT(a) > 0 FROM Application a WHERE a.user.id = :userId AND a.job.recruiter.id = :recruiterId AND a.isDeleted = false")
+        boolean existsByUserIdAndJobRecruiterIdAndNotDeleted(@Param("userId") Long userId, @Param("recruiterId") Long recruiterId);
+
         @Query("SELECT a FROM Application a WHERE a.job.recruiter.id = :recruiterId AND a.isDeleted = false")
         Page<Application> findByJobRecruiterIdAndNotDeleted(@Param("recruiterId") Long recruiterId, Pageable pageable);
 

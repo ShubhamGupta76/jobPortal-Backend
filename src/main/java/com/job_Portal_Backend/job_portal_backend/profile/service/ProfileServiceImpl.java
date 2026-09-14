@@ -35,6 +35,11 @@ public class ProfileServiceImpl implements ProfileService {
         if (request.getHeadline() != null) user.setHeadline(request.getHeadline());
         if (request.getBio() != null) user.setBio(request.getBio());
         if (request.getLocation() != null) user.setLocation(request.getLocation());
+        if (request.getSkills() != null) user.setSkills(request.getSkills());
+        if (request.getExperienceLevel() != null) user.setExperienceLevel(request.getExperienceLevel());
+        if (request.getPreferredJobType() != null) user.setPreferredJobType(request.getPreferredJobType());
+        if (request.getPreferredWorkplaceType() != null) user.setPreferredWorkplaceType(request.getPreferredWorkplaceType());
+        if (request.getSalaryExpectation() != null) user.setSalaryExpectation(request.getSalaryExpectation());
 
         if (request.getResume() != null && !request.getResume().isEmpty()) {
             Files.createDirectories(resumeDirectory);
@@ -57,6 +62,11 @@ public class ProfileServiceImpl implements ProfileService {
         dto.setHeadline(user.getHeadline());
         dto.setBio(user.getBio());
         dto.setLocation(user.getLocation());
+        dto.setSkills(user.getSkills());
+        dto.setExperienceLevel(user.getExperienceLevel());
+        dto.setPreferredJobType(user.getPreferredJobType());
+        dto.setPreferredWorkplaceType(user.getPreferredWorkplaceType());
+        dto.setSalaryExpectation(user.getSalaryExpectation());
         dto.setResumePath(user.getResumePath());
         dto.setRoles(user.getRoles().stream().map(role -> role.getName()).toList());
         dto.setCreatedAt(user.getCreatedAt());

@@ -16,6 +16,10 @@ public interface FileUploadService {
 
     FileUploadDto getFileById(Long fileId, User user);
 
+    FileUploadDto getFileByIdForAdmin(Long fileId);
+
+    byte[] downloadFileForAdmin(Long fileId) throws IOException;
+
     List<FileUploadDto> getFilesByUser(User user);
 
     List<FileUploadDto> getFilesByEntity(String entityType, Long entityId, User user);

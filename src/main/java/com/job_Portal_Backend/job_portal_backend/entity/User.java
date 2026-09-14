@@ -41,6 +41,11 @@ public class User implements UserDetails {
     private String bio;
 
     private String location;
+    private String skills;
+    private String experienceLevel;
+    private String preferredJobType;
+    private String preferredWorkplaceType;
+    private Double salaryExpectation;
     private String resumePath;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -152,6 +157,46 @@ public class User implements UserDetails {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getSkills() {
+        return skills;
+    }
+
+    public void setSkills(String skills) {
+        this.skills = skills;
+    }
+
+    public String getExperienceLevel() {
+        return experienceLevel;
+    }
+
+    public void setExperienceLevel(String experienceLevel) {
+        this.experienceLevel = experienceLevel;
+    }
+
+    public String getPreferredJobType() {
+        return preferredJobType;
+    }
+
+    public void setPreferredJobType(String preferredJobType) {
+        this.preferredJobType = preferredJobType;
+    }
+
+    public String getPreferredWorkplaceType() {
+        return preferredWorkplaceType;
+    }
+
+    public void setPreferredWorkplaceType(String preferredWorkplaceType) {
+        this.preferredWorkplaceType = preferredWorkplaceType;
+    }
+
+    public Double getSalaryExpectation() {
+        return salaryExpectation;
+    }
+
+    public void setSalaryExpectation(Double salaryExpectation) {
+        this.salaryExpectation = salaryExpectation;
     }
 
     public String getResumePath() {

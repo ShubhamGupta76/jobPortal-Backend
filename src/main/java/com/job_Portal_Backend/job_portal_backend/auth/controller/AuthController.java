@@ -9,7 +9,11 @@ import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.otp.OtpService;
 import com.job_Portal_Backend.job_portal_backend.otp.dto.SendOtpRequest;
 import com.job_Portal_Backend.job_portal_backend.otp.dto.VerifyOtpRequest;
+import com.job_Portal_Backend.job_portal_backend.session.dto.RefreshTokenRequest;
+import com.job_Portal_Backend.job_portal_backend.session.service.RefreshResult;
+import com.job_Portal_Backend.job_portal_backend.session.service.UserSessionService;
 import com.job_Portal_Backend.job_portal_backend.util.RoleUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +24,6 @@ import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
@@ -29,10 +32,14 @@ public class AuthController {
     @Autowired
     private OtpService otpService;
 
+    @Autowired
+    private UserSessionService userSessionService;
+
     @PostMapping("/login-credentials")
-    public ResponseEntity<ApiResponse<String>> sendOtpForLogin(@Valid @RequestBody LoginRequest request) {
-        authService.sendOtpForLogin(request);
-        return ResponseEntity.ok(new ApiResponse<>(true, "OTP sent to your email", "Check your email for OTP"));
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        AuthResponse response = authService.login(request, httpRequest);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Login successful", response));
     }
 
     @PostMapping("/register")
@@ -42,10 +49,12 @@ public class AuthController {
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<ApiResponse<AuthResponse>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request,
+            HttpServletRequest httpRequest) {
         otpService.verifyOtp(request.getEmail(), request.getOtp());
-        AuthResponse response = isLoginFlow(request.getEmail()) ? authService.completeLoginAfterOtp(request.getEmail())
-                : authService.completeRegistrationAfterOtp(request.getEmail());
+        AuthResponse response = isLoginFlow(request.getEmail())
+                ? authService.completeLoginAfterOtp(request.getEmail(), httpRequest)
+                : authService.completeRegistrationAfterOtp(request.getEmail(), httpRequest);
         return ResponseEntity.ok(new ApiResponse<>(true, "Verification successful", response));
     }
 
@@ -80,7 +89,30 @@ public class AuthController {
                 user.getEmail(),
                 user.getFirstName(),
                 user.getLastName(),
-                role);
+                role,
+                null,
+                null);
         return ResponseEntity.ok(new ApiResponse<>(true, "Current user retrieved successfully", response));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request,
+            HttpServletRequest httpRequest) {
+        RefreshResult result = userSessionService.refresh(request.getRefreshToken(), httpRequest);
+        User user = result.user();
+        String role = RoleUtils.resolvePrimaryRole(user.getRoles());
+        AuthResponse response = new AuthResponse(result.accessToken(), "Bearer", user.getId(), user.getEmail(),
+                user.getFirstName(), user.getLastName(), role, result.rawRefreshToken(), result.sessionId());
+        return ResponseEntity.ok(new ApiResponse<>(true, "Token refreshed", response));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<String>> logout(@RequestBody(required = false) RefreshTokenRequest request) {
+        // Best-effort: logging out is always a client-side success even if there is no
+        // (or an already-invalid) refresh token to revoke server-side.
+        if (request != null) {
+            userSessionService.revokeByRawToken(request.getRefreshToken());
+        }
+        return ResponseEntity.ok(new ApiResponse<>(true, "Logged out", null));
     }
 }

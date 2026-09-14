@@ -13,4 +13,8 @@ public class AuthResponse {
     private String firstName;
     private String lastName;
     private String role;
+    // Opaque refresh token, additive to the existing access token; null where no session is
+    // issued (e.g. GET /me). Never a JWT and never logged.
+    private String refreshToken;
+    private Long sessionId;
 }

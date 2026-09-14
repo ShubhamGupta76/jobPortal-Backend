@@ -2,6 +2,7 @@ package com.job_Portal_Backend.job_portal_backend.config;
 
 import com.job_Portal_Backend.job_portal_backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -32,6 +33,11 @@ public class SecurityConfig {
 
     @Autowired
     private UserRepository userRepository;
+
+    // Comma-separated list of allowed CORS origin patterns. Defaults to "*" to preserve current
+    // behavior; set app.cors.allowed-origins in production to a concrete origin list.
+    @Value("${app.cors.allowed-origins:*}")
+    private String allowedOriginPatterns;
 
     @Bean
     public UserDetailsService userDetailsService() {
@@ -69,6 +75,7 @@ public class SecurityConfig {
                                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access denied")))
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/api/v1/auth/me").authenticated()
+                        .requestMatchers("/api/v1/auth/sessions/**").authenticated()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/jobs/**").permitAll()
                         .requestMatchers("/api/v1/companies").permitAll()
@@ -77,6 +84,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/assessments/**").permitAll()
                         .requestMatchers("/api/v1/test-sessions/**").permitAll()
                         .requestMatchers("/interview-signal/**").permitAll()
+                        .requestMatchers("/api/v1/billing/plans").permitAll()
+                        .requestMatchers("/api/v1/billing/webhooks/**").permitAll()
                         .requestMatchers("/api/v1/recruiter/**").hasRole("RECRUITER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/interview-sessions/**").authenticated()
@@ -96,7 +105,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList(allowedOriginPatterns.split("\\s*,\\s*")));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

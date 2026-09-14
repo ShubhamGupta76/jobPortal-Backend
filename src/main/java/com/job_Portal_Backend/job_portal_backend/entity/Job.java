@@ -11,7 +11,11 @@ import java.util.List;
 import java.util.ArrayList;
 
 @Entity
-@Table(name = "jobs")
+@Table(name = "jobs", indexes = {
+        @Index(name = "idx_jobs_company_id", columnList = "company_id"),
+        @Index(name = "idx_jobs_recruiter_id", columnList = "recruiter_id"),
+        @Index(name = "idx_jobs_status", columnList = "status")
+})
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)

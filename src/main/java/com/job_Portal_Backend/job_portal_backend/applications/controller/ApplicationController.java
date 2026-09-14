@@ -3,6 +3,7 @@ package com.job_Portal_Backend.job_portal_backend.applications.controller;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationCreateRequest;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationDto;
 import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationStatusUpdateRequest;
+import com.job_Portal_Backend.job_portal_backend.applications.dto.ApplicationTimelineEventDto;
 import com.job_Portal_Backend.job_portal_backend.applications.service.ApplicationService;
 import com.job_Portal_Backend.job_portal_backend.config.JwtService;
 import com.job_Portal_Backend.job_portal_backend.dto.ApiResponse;
@@ -20,7 +21,6 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/applications")
-@CrossOrigin(origins = "*")
 public class ApplicationController {
 
     @Autowired
@@ -97,4 +97,16 @@ public class ApplicationController {
         ApplicationDto application = applicationService.updateApplicationStatus(id, request.getStatus(), recruiter);
         return ResponseEntity.ok(new ApiResponse<>(true, "Application status updated successfully", application));
     }
+
+        @GetMapping("/{id}/timeline")
+        @PreAuthorize("isAuthenticated()")
+        public ResponseEntity<ApiResponse<List<ApplicationTimelineEventDto>>> getApplicationTimeline(
+                        @PathVariable Long id,
+                        @RequestHeader("Authorization") String token) {
+                String email = jwtService.extractUsername(token.substring(7));
+                User viewer = userRepository.findByEmail(email)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                List<ApplicationTimelineEventDto> timeline = applicationService.getApplicationTimeline(id, viewer);
+                return ResponseEntity.ok(new ApiResponse<>(true, "Application timeline retrieved successfully", timeline));
+        }
 }

@@ -3,7 +3,10 @@ package com.job_Portal_Backend.job_portal_backend.controller;
 import com.job_Portal_Backend.job_portal_backend.dto.ApiResponse;
 import com.job_Portal_Backend.job_portal_backend.dto.NotificationDto;
 import com.job_Portal_Backend.job_portal_backend.entity.User;
+import com.job_Portal_Backend.job_portal_backend.notificationpreferences.dto.NotificationPreferenceDto;
+import com.job_Portal_Backend.job_portal_backend.notificationpreferences.service.NotificationPreferenceService;
 import com.job_Portal_Backend.job_portal_backend.service.NotificationService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -13,13 +16,33 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
-@CrossOrigin(origins = "*")
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final NotificationPreferenceService notificationPreferenceService;
 
-    public NotificationController(NotificationService notificationService) {
+    public NotificationController(NotificationService notificationService,
+            NotificationPreferenceService notificationPreferenceService) {
         this.notificationService = notificationService;
+        this.notificationPreferenceService = notificationPreferenceService;
+    }
+
+    @GetMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<NotificationPreferenceDto>>> getPreferences(Authentication authentication) {
+        User user = currentUser(authentication);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Notification preferences retrieved successfully",
+                notificationPreferenceService.getPreferences(user)));
+    }
+
+    @PutMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<NotificationPreferenceDto>>> updatePreferences(
+            @Valid @RequestBody List<NotificationPreferenceDto> updates,
+            Authentication authentication) {
+        User user = currentUser(authentication);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Notification preferences updated successfully",
+                notificationPreferenceService.updatePreferences(user, updates)));
     }
 
     @GetMapping

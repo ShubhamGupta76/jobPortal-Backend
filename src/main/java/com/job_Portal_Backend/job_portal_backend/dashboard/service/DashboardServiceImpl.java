@@ -30,6 +30,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -44,6 +46,7 @@ public class DashboardServiceImpl implements DashboardService {
         private final NotificationService notificationService;
         private final JobMapper jobMapper;
         private final ApplicationMapper applicationMapper;
+        private final com.job_Portal_Backend.job_portal_backend.recommendations.service.RecommendationService recommendationService;
 
         public DashboardServiceImpl(
                         ApplicationRepository applicationRepository,
@@ -54,7 +57,8 @@ public class DashboardServiceImpl implements DashboardService {
                         InterviewRepository interviewRepository,
                         NotificationService notificationService,
                         JobMapper jobMapper,
-                        ApplicationMapper applicationMapper) {
+                        ApplicationMapper applicationMapper,
+                        com.job_Portal_Backend.job_portal_backend.recommendations.service.RecommendationService recommendationService) {
                 this.applicationRepository = applicationRepository;
                 this.bookmarkRepository = bookmarkRepository;
                 this.jobRepository = jobRepository;
@@ -64,6 +68,7 @@ public class DashboardServiceImpl implements DashboardService {
                 this.notificationService = notificationService;
                 this.jobMapper = jobMapper;
                 this.applicationMapper = applicationMapper;
+                this.recommendationService = recommendationService;
         }
 
         @Override
@@ -122,7 +127,7 @@ public class DashboardServiceImpl implements DashboardService {
                                 .forEach(interviewSchedule::add);
                 response.setUpcomingInterviewSchedule(interviewSchedule);
 
-                response.setProfileStrength(buildProfileStrength(user));
+                response.setProfileStrength(getProfileStrength(user));
                 response.setRecommendedJobs(buildRecommendedJobs(user));
                 response.setRecentActivities(buildRecentActivities(user, recentApplications, upcomingInterviews));
 
@@ -178,6 +183,56 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         @Override
+        public com.job_Portal_Backend.job_portal_backend.dashboard.dto.RecruiterAnalyticsResponse getRecruiterAnalytics(User user, int days) {
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime from = now.minusDays(days);
+                LocalDateTime weekFrom = now.minusDays(7);
+                List<com.job_Portal_Backend.job_portal_backend.entity.Job> jobs = jobRepository.findByRecruiterIdAndNotDeleted(user.getId());
+                List<Application> applications = applicationRepository.findAllByJobRecruiterIdAndNotDeleted(user.getId());
+                List<Interview> interviews = interviewRepository.findByRecruiterAndIsDeletedFalse(user);
+
+                long jobsPosted = jobs.stream().filter(job -> job.getCreatedAt() != null && !job.getCreatedAt().isBefore(from)).count();
+                long activeJobs = jobs.stream().filter(job -> !"CLOSED".equalsIgnoreCase(job.getStatus())).count();
+                List<Application> periodApplications = applications.stream()
+                                .filter(application -> application.getCreatedAt() != null && !application.getCreatedAt().isBefore(from))
+                                .toList();
+                List<Application> weekApplications = applications.stream()
+                                .filter(application -> application.getCreatedAt() != null && !application.getCreatedAt().isBefore(weekFrom))
+                                .toList();
+                long shortlisted = countStatus(periodApplications, Application.ApplicationStatus.SHORTLISTED);
+                long assessmentsAssigned = periodApplications.stream().filter(application -> application.getAssignedAssessment() != null).count();
+                long assessmentsCompleted = periodApplications.stream()
+                                .filter(application -> application.getAssignedAssessment() != null)
+                                .filter(application -> application.getStatus() != Application.ApplicationStatus.ASSESSMENT)
+                                .count();
+                long interviewCount = interviews.stream().filter(interview -> interview.getScheduledAt() != null && !interview.getScheduledAt().isBefore(from)).count();
+                long hires = countStatus(periodApplications, Application.ApplicationStatus.HIRED);
+
+                Map<String, Long> funnel = new LinkedHashMap<>();
+                for (Application.ApplicationStatus status : Application.ApplicationStatus.values()) {
+                        funnel.put(status.name(), countStatus(periodApplications, status));
+                }
+
+                com.job_Portal_Backend.job_portal_backend.dashboard.dto.RecruiterAnalyticsResponse response = new com.job_Portal_Backend.job_portal_backend.dashboard.dto.RecruiterAnalyticsResponse();
+                response.setPeriodDays(days);
+                response.setJobsPosted(jobsPosted);
+                response.setActiveJobs(activeJobs);
+                response.setApplications(periodApplications.size());
+                response.setApplicationsThisWeek(weekApplications.size());
+                response.setShortlisted(shortlisted);
+                response.setAssessmentsAssigned(assessmentsAssigned);
+                response.setAssessmentsCompleted(assessmentsCompleted);
+                response.setInterviews(interviewCount);
+                response.setHires(hires);
+                response.setFunnel(funnel);
+                return response;
+        }
+
+        private long countStatus(List<Application> applications, Application.ApplicationStatus status) {
+                return applications.stream().filter(application -> application.getStatus() == status).count();
+        }
+
+        @Override
         public PublicMetricsResponse getPublicMetrics() {
                 return new PublicMetricsResponse(
                                 jobRepository.count(),
@@ -187,22 +242,15 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         private List<JobDto> buildRecommendedJobs(User user) {
-                Set<Long> excludedJobIds = new HashSet<>();
-                applicationRepository.findByUserIdAndNotDeleted(user.getId())
-                                .forEach(application -> excludedJobIds.add(application.getJob().getId()));
-                bookmarkRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId())
-                                .forEach(bookmark -> excludedJobIds.add(bookmark.getJob().getId()));
-
-                return jobRepository.findJobsWithFilters(null, null, null, null, null, null)
-                                .stream()
-                                .filter(job -> !excludedJobIds.contains(job.getId()))
-                                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                                .limit(4)
-                                .map(jobMapper::toDto)
+                // Delegates to RecommendationService so the dashboard preview and the full
+                // /candidate/recommendations page share exactly one ranking implementation.
+                return recommendationService.getTopRecommendations(user, 4).stream()
+                                .map(com.job_Portal_Backend.job_portal_backend.recommendations.dto.RecommendedJobDto::getJob)
                                 .toList();
         }
 
-        private ProfileStrengthDto buildProfileStrength(User user) {
+        @Override
+        public ProfileStrengthDto getProfileStrength(User user) {
                 int score = 0;
                 if (hasText(user.getFirstName())) score += 15;
                 if (hasText(user.getLastName())) score += 10;

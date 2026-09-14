@@ -4,9 +4,12 @@ import com.job_Portal_Backend.job_portal_backend.entity.User;
 import com.job_Portal_Backend.job_portal_backend.service.RateLimitingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -16,6 +19,7 @@ public class RateLimitingServiceImpl implements RateLimitingService {
     private RedisTemplate<String, String> redisTemplate;
 
     private static final String RATE_LIMIT_PREFIX = "rate_limit:";
+    private final ConcurrentHashMap<String, LocalRateLimit> localRateLimits = new ConcurrentHashMap<>();
 
     private String buildKey(String identifier, String action) {
         return RATE_LIMIT_PREFIX + identifier + ":" + action;
@@ -28,13 +32,31 @@ public class RateLimitingServiceImpl implements RateLimitingService {
     @Override
     public boolean isAllowed(String key, int maxRequests, Duration window) {
         String redisKey = buildKey(key);
-        Long currentCount = redisTemplate.opsForValue().increment(redisKey);
+        try {
+            Long currentCount = redisTemplate.opsForValue().increment(redisKey);
 
-        if (currentCount == 1) {
-            redisTemplate.expire(redisKey, window);
+            if (currentCount == 1) {
+                redisTemplate.expire(redisKey, window);
+            }
+
+            return currentCount <= maxRequests;
+        } catch (DataAccessException exception) {
+            return isAllowedLocally(redisKey, maxRequests, window);
         }
+    }
 
-        return currentCount <= maxRequests;
+    private boolean isAllowedLocally(String key, int maxRequests, Duration window) {
+        Instant now = Instant.now();
+        LocalRateLimit limit = localRateLimits.compute(key, (ignored, current) -> {
+            if (current == null || now.isAfter(current.expiresAt())) {
+                return new LocalRateLimit(1, now.plus(window));
+            }
+            return new LocalRateLimit(current.count() + 1, current.expiresAt());
+        });
+        return limit.count() <= maxRequests;
+    }
+
+    private record LocalRateLimit(long count, Instant expiresAt) {
     }
 
     @Override
