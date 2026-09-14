@@ -1,11 +1,7 @@
-# Production profile (Render + Neon). No secrets or environment-specific values are hardcoded
-# here — everything comes from environment variables set on Render. Properties with no ":default"
-# are REQUIRED: the app fails fast at startup if they are missing, which is intentional (a running
-# app with a guessable/insecure fallback secret is worse than a deploy that refuses to start).
+
 
 spring:
   datasource:
-    # Neon connection string, e.g. jdbc:postgresql://<host>/<db>?sslmode=require
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
@@ -16,14 +12,7 @@ spring:
       hibernate:
         format_sql: false
   data:
-    # Redis is supporting infrastructure, not a hard dependency: RateLimitingServiceImpl already
-    # catches DataAccessException on every Redis call and falls back to an in-process
-    # ConcurrentHashMap limiter, so a missing/unreachable Redis degrades rate limiting to
-    # per-instance-only (not shared across multiple Render instances) rather than breaking the
-    # app. The "localhost" default below is therefore an intentional, safe trigger for that
-    # existing fallback in a single-instance deployment — not a misconfiguration. If you run more
-    # than one instance and need rate limits shared across them, set REDIS_HOST (and friends) to a
-    # real Redis (e.g. Render's Key Value add-on, or Upstash).
+    
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
@@ -60,12 +49,13 @@ app:
     webhook-secret: ${BILLING_WEBHOOK_SECRET}
 
 piston:
-  # Required, no default: PistonService has no fallback for an unreachable/misconfigured
-  # endpoint, and "http://localhost:2000" would silently point at nothing in this container
-  # (Piston does not run inside the Render web service). Point this at a real Piston deployment
-  # reachable from Render before assessments can execute code in production.
+  # Optional: no default, and deliberately NOT "http://localhost:2000" (that would silently
+  # point at nothing in this container). An unset PISTON_API_URL now resolves to an empty
+  # string instead of failing startup; PistonService checks for that and fails each
+  # code-execution request gracefully (503) rather than the whole app refusing to start.
+  # Set PISTON_API_URL to a real, reachable Piston deployment to enable code execution.
   api:
-    url: ${PISTON_API_URL}
+    url: ${PISTON_API_URL:}
 
 file:
   upload:

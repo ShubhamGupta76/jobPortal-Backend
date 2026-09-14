@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,11 @@ public class PistonService {
 
     @SuppressWarnings("unchecked")
     public PistonExecutionResult execute(String language, String version, String code, String stdin) {
+        if (pistonApiUrl == null || pistonApiUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Code execution service is not configured");
+        }
+
         Map<String, Object> payload = Map.of(
                 "language", mapLanguage(language),
                 "version", version == null || version.isBlank() ? "*" : version,
