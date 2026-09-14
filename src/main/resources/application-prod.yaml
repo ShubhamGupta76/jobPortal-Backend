@@ -1,0 +1,76 @@
+# Production profile (Render + Neon). No secrets or environment-specific values are hardcoded
+# here — everything comes from environment variables set on Render. Properties with no ":default"
+# are REQUIRED: the app fails fast at startup if they are missing, which is intentional (a running
+# app with a guessable/insecure fallback secret is worse than a deploy that refuses to start).
+
+spring:
+  datasource:
+    # Neon connection string, e.g. jdbc:postgresql://<host>/<db>?sslmode=require
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  data:
+    # Redis is supporting infrastructure, not a hard dependency: RateLimitingServiceImpl already
+    # catches DataAccessException on every Redis call and falls back to an in-process
+    # ConcurrentHashMap limiter, so a missing/unreachable Redis degrades rate limiting to
+    # per-instance-only (not shared across multiple Render instances) rather than breaking the
+    # app. The "localhost" default below is therefore an intentional, safe trigger for that
+    # existing fallback in a single-instance deployment — not a misconfiguration. If you run more
+    # than one instance and need rate limits shared across them, set REDIS_HOST (and friends) to a
+    # real Redis (e.g. Render's Key Value add-on, or Upstash).
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_TIMEOUT:2s}
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://job-portal-ui-ten.vercel.app}
+  billing:
+    webhook-secret: ${BILLING_WEBHOOK_SECRET}
+
+piston:
+  # Required, no default: PistonService has no fallback for an unreachable/misconfigured
+  # endpoint, and "http://localhost:2000" would silently point at nothing in this container
+  # (Piston does not run inside the Render web service). Point this at a real Piston deployment
+  # reachable from Render before assessments can execute code in production.
+  api:
+    url: ${PISTON_API_URL}
+
+file:
+  upload:
+    dir: ${FILE_UPLOAD_DIR:/tmp/jobportal/uploads}
+
+logging:
+  level:
+    com.job_Portal_Backend: INFO
